@@ -4,8 +4,10 @@
 #   site.data["gamemaster"]["tables"]["pokemon" | "moves" | "cups"]
 #     "columns" => [{ "label" => "baseStats.atk", "numeric" => true }, ...]
 #     "rows"    => [["Magnezone", "462", ...], ...]   one array of strings per record
+#     "sticky"  => 1   how many leading columns stay in view while scrolling sideways
 #
 # The pages (pokemon.html, moves.html, cups.html) render a table with _layouts/table.html.
+# The rankings pages (_plugins/rankings_pages.rb) build their tables with the same code.
 #
 # Every field in the data gets a column, so nothing is hidden. How values become text:
 #   - A field that's an object in every record (baseStats, defaultIVs, family, formChange)
@@ -14,55 +16,29 @@
 #   - A cup filter ({filterType, name, values}) becomes "type: bug, dark", one per line.
 #   - Anything else that's nested is shown as compact JSON.
 #   - A missing field is an empty cell; a field that's present but null shows "null".
-# The JSON file is never changed or copied.
+# The JSON files are never changed or copied.
 
 require "json"
 
 module PogoPvp
-  class GamemasterTables < Jekyll::Generator
-    safe true
-    priority :highest
-
-    # The list in gamemaster.json => the field shown first, and kept in view while scrolling.
-    SUBJECTS = {
-      "pokemon" => "speciesName",
-      "moves"   => "name",
-      "cups"    => "title",
-    }.freeze
+  # Shared by both generators: turns a list of JSON records into columns and rows.
+  module Tables
+    module_function
 
     NUMBER = /\A-?\d+(\.\d+)?\z/
 
-    def generate(site)
-      rel = site.config.fetch("gamemaster", "src/data/gamemaster.json")
-      path = File.join(site.source, rel)
-      raise "PoGo PvP: game master not found at #{rel}" unless File.exist?(path)
+    # records:  array of hashes
+    # lead:     the field names to show first, in order; the rest follow in data order
+    # sticky:   how many leading columns stay in view while scrolling sideways; the last of
+    #           them is the name column (a row heading)
+    def build(records, lead, sticky = Array(lead).size)
+      lead = Array(lead)
 
-      gm = JSON.parse(File.read(path, encoding: "bom|utf-8"))
-
-      tables = {}
-      SUBJECTS.each do |subject, key|
-        records = gm.fetch(subject)
-        tables[subject] = build_table(records, key)
-        t = tables[subject]
-        Jekyll.logger.info "PoGo PvP:", "#{subject}: #{t['rows'].size} rows, #{t['columns'].size} columns"
-      end
-
-      site.data["gamemaster"] = {
-        "source"    => rel,
-        "id"        => gm["id"],
-        "timestamp" => gm["timestamp"],
-        "tables"    => tables,
-      }
-    end
-
-    private
-
-    def build_table(records, key)
       # Fields in order of first appearance across all records, so rare fields aren't lost.
       fields = []
       records.each { |r| r.each_key { |f| fields << f unless fields.include?(f) } }
-      fields.delete(key)
-      fields.unshift(key)
+      fields -= lead
+      fields = lead + fields
 
       # Expand a field into "field.key" columns only if it's an object everywhere it appears.
       columns = []
@@ -98,7 +74,7 @@ module PogoPvp
         }
       end
 
-      { "columns" => cols, "rows" => rows }
+      { "columns" => cols, "rows" => rows, "sticky" => sticky }
     end
 
     def text(v, null_text = "")
@@ -125,6 +101,44 @@ module PogoPvp
       else
         v.to_s
       end
+    end
+
+    # Reads a JSON file from the repo, relative to the site source.
+    def read_json(site, rel)
+      path = File.join(site.source, rel)
+      raise "PoGo PvP: #{rel} not found" unless File.exist?(path)
+      JSON.parse(File.read(path, encoding: "bom|utf-8"))
+    end
+  end
+
+  class GamemasterTables < Jekyll::Generator
+    safe true
+    priority :highest
+
+    # The list in gamemaster.json => the field shown first, and kept in view while scrolling.
+    SUBJECTS = {
+      "pokemon" => "speciesName",
+      "moves"   => "name",
+      "cups"    => "title",
+    }.freeze
+
+    def generate(site)
+      rel = site.config.fetch("gamemaster", "src/data/gamemaster.json")
+      gm = Tables.read_json(site, rel)
+
+      tables = {}
+      SUBJECTS.each do |subject, key|
+        t = Tables.build(gm.fetch(subject), key)
+        tables[subject] = t
+        Jekyll.logger.info "PoGo PvP:", "#{subject}: #{t['rows'].size} rows, #{t['columns'].size} columns"
+      end
+
+      site.data["gamemaster"] = {
+        "source"    => rel,
+        "id"        => gm["id"],
+        "timestamp" => gm["timestamp"],
+        "tables"    => tables,
+      }
     end
   end
 end

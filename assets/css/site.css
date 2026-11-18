@@ -63,6 +63,21 @@ main { padding: 1rem 16px 2rem; }
 .card-link { text-decoration: none; }
 .card-link::after { content: ""; position: absolute; inset: 0; }
 
+/* ---- Rankings: the cup dropdown ---- */
+.ranking-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
+.ranking-picker label { font-weight: 600; }
+.ranking-picker select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35em 0.5em;
+  max-width: 100%;
+}
+.ranking-picker select:hover { border-color: var(--accent); }
+.page-intro h2 { margin: 0.75rem 0 0; font-size: 1.35rem; }
+
 /* ---- Table controls (added by table.js) ---- */
 .table-controls {
   display: flex;
@@ -146,6 +161,18 @@ table.data tr > :first-child {
   border-right: 1px solid var(--border);
 }
 table.data thead tr > :first-child { z-index: 3; }
+
+/* Rankings: two columns (rank, then name) stay in view. The rank column has a fixed width,
+ * and table.js measures it into --sticky-2-left so the name column sits right after it. */
+table.data.sticky-2 tr > :first-child { width: 4rem; min-width: 4rem; max-width: 4rem; }
+table.data.sticky-2 tr > :nth-child(2) {
+  position: sticky;
+  left: var(--sticky-2-left, 4rem);
+  z-index: 1;
+  border-right: 1px solid var(--border);
+}
+table.data.sticky-2 thead tr > :nth-child(2) { z-index: 3; }
+table.data.sticky-2 tr > :first-child { border-right: 0; }
 table.data tbody th { font-weight: 600; white-space: nowrap; }
 
 /* Sort buttons in the header (added by table.js) */

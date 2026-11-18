@@ -189,6 +189,16 @@
     apply();
   });
 
+  // Two columns kept in view (rankings: rank, then name): the second one sits right after
+  // the first, whatever width the browser gave it.
+  if (table.classList.contains("sticky-2")) {
+    var setLeft = function () {
+      table.style.setProperty("--sticky-2-left", headCells[0].getBoundingClientRect().width + "px");
+    };
+    setLeft();
+    window.addEventListener("resize", setLeft);
+  }
+
   table.classList.add("js");
   apply();
 })();

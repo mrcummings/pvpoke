@@ -11,8 +11,11 @@ baseurl: ""
 # 4014: this project's port in game-hub's port registry.
 port: 4014
 
-# The data file the plugin reads, relative to the repo root.
+# The data the plugins read, relative to the repo root.
 gamemaster: src/data/gamemaster.json
+# _plugins/rankings_pages.rb: one page per <cup>/<category>/rankings-<CP>.json in this folder.
+rankings: src/data/rankings
+rankings_category: overall
 
 # Jekyll 4 adds these to its built-in list (Gemfile, vendor, dotfiles, _folders and so on).
 # src/ is the upstream PHP site (138 MB) and must stay out of the build. Excluded folders

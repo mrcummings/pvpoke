@@ -58,14 +58,17 @@ The owner's fork of PvPoke (pvpoke.com), a public website of tools for Pokémon 
 - `README.md`, `LICENSE` (MIT): upstream's. **Don't edit `README.md`** (upstream changes it); the "Running" notes for PoGo PvP live in this file instead.
 - `CLAUDE.md`, `CLAUDE-TEMPLATE.md`, `STYLE-GUIDE.md`: the owner's, not upstream's. They sit outside `src/`, so the PHP site never serves them, and `_config.yml` excludes them from the Jekyll site.
 - **The PoGo PvP Jekyll site, all at the repo root** (upstream has none of these files, so they can't cause merge conflicts):
-  - `_config.yml`: title, `port: 4014`, `gamemaster:` (the path of the data file), and `exclude:` (`src/`, `docker/` and the docs).
+  - `_config.yml`: title, `port: 4014`, the data paths (`gamemaster:`, `rankings:`, `rankings_category:`), and `exclude:` (`src/`, `docker/` and the docs).
   - `Gemfile`, `Gemfile.lock`: the standard minimal-site Gemfile.
-  - `_plugins/gamemaster_tables.rb`: the **generator plugin**. It reads `src/data/gamemaster.json` and turns its `pokemon`, `moves` and `cups` lists into columns and rows, stored as `site.data["gamemaster"]`. It never changes or copies the JSON. The comment at its top explains how nested values become text.
-  - `_layouts/default.html` (header, nav, theme toggle) and `_layouts/table.html` (renders one table, chosen by the page's `table:` front matter).
-  - `index.html` (three cards), `pokemon.html`, `moves.html`, `cups.html`.
+  - `_plugins/gamemaster_tables.rb`: a **generator plugin**. It reads `src/data/gamemaster.json` and turns its `pokemon`, `moves` and `cups` lists into columns and rows, stored as `site.data["gamemaster"]`. It also holds `PogoPvp::Tables`, the shared code that turns JSON records into a table; the comment at its top explains how nested values become text. It never changes or copies the JSON.
+  - `_plugins/rankings_pages.rb`: a second generator plugin. It makes **one page per ranking list** (no file per page), plus the dropdown's list in `site.data["rankings"]`. The comment at its top explains the URLs, labels, order and columns.
+  - `_includes/data-table.html`: the table markup, shared by both layouts below.
+  - `_layouts/default.html` (header, nav, theme toggle); `_layouts/table.html` (the Pokémon, Moves and Cups pages: one table, chosen by the page's `table:` front matter); `_layouts/rankings.html` (dropdown + one ranking).
+  - `index.html` (four cards), `pokemon.html`, `moves.html`, `cups.html`. The rankings pages have no source file; the plugin makes them.
   - `assets/css/theme.css`, `assets/js/theme.js`: **shared with the other game projects. Never edit them here** (see `STYLE-GUIDE.md`).
   - `assets/css/site.css`: this site's own styles and its blue accent.
   - `assets/js/table.js`: filter boxes and click-to-sort. The tables are complete without it.
+  - `assets/js/rankings.js`: the rankings dropdown (choosing a cup opens its page).
 - `.gitignore`: upstream's, with the standard Jekyll lines added at the end (2026-11-18). If upstream ever changes this file, a merge conflict there is possible but small.
 
 ### Data and metadata
@@ -76,12 +79,19 @@ The owner's fork of PvPoke (pvpoke.com), a public website of tools for Pokémon 
 
 ### Site: PoGo PvP (the Jekyll site)
 - **Running it:** from the repo root, `bundle install` (first time on a machine, or after the Gemfile changes), then `bundle exec jekyll s`, then open `http://localhost:4014`. It also starts with the game-hub (`localhost:4010`).
-- **Pages:** `/` (three cards with counts), `/pokemon/`, `/moves/` and `/cups/`. Decided 2026-11-18: **no page per Pokémon, move or cup**, only these three tables.
+- **Pages:** `/` (four cards with counts), `/pokemon/`, `/moves/`, `/cups/` and the rankings. Decided 2026-11-18: **no page per Pokémon, move or cup**, only these tables.
+- **Rankings** (added 2026-11-18, to the owner's spec):
+  - **The owner's spec:** a dropdown at the top listing every cup that has rankings. Great League, Ultra League and Master League come first, in that order, then a separator, then the rest alphabetically. Great League is the default view, and choosing a cup shows its ranking as a table.
+  - **How it's built:** one generated page per ranking list. `/rankings/` is Great League (`all`, 1500), and the others are at `/rankings/<cup>/<CP>/`, for example `/rankings/classic/2500/`. The dropdown opens the chosen page. Separate pages were chosen over one page that loads data with JavaScript, so `table.js` works unchanged, every table is complete HTML, and each ranking has its own address that can be bookmarked.
+  - **Data:** the **overall** rankings only (`src/data/rankings/<cup>/overall/rankings-<CP>.json`): 36 lists from 25 cup folders, 20,291 rows. Four cups have several leagues (`all`, `classic`, `mega`, `premier`). Upstream's other categories (leads, closers and so on) aren't shown, but their scores are in the `scores.*` columns.
+  - **Labels:** the cup `all` is named by its league; otherwise upstream's format title, then the cup's title (`remix`'s comes from upstream's archived cup file); a cup with several leagues gets the league added, for example "Classic (Ultra League)". "Little League" (`all` at 500 CP) is this site's label; upstream doesn't list it on its rankings page. Within the alphabetical list, a cup's leagues stay together, lowest CP first.
+  - **Columns:** `rank` (the position in the file, which is in score order), `speciesName` (these two stay in view), `speciesId`, `score`, the six `scores.*` (in the order leads, closers, switches, chargers, attackers, consistency; checked against the category files), `moveset`, then the rest in the JSON's order. Matchups and counters show as `mimikyu (729)`, and move usage as `THUNDER_SHOCK (139900)`.
+- **Build time:** about 13 seconds on the laptop (2026-11-18), mostly the rankings; `_site` is about 17 MB. While `jekyll s` is running, every saved change triggers a full rebuild of that length.
 - **The tables show every field in the data:** one column per field, labeled with its JSON name, in order of first appearance. An object field becomes one column per key, for example `baseStats.atk`. The first column is the name, and it stays in view while scrolling sideways. Counts as of 2026-11-18: Pokémon 1,753 rows × 41 columns, moves 357 × 20, cups 27 × 13.
 - **Empty vs. null:** a missing field is an empty cell, and a field set to `null` shows `null` (five Pokémon have `searchPriority: null`).
 - **Filtering and sorting** (`table.js`): one box filters on all columns, plus a box under each heading. A column box accepts text, `!text`, `=text`, `>200`, `<=50` and `100..200`. Clicking a heading sorts ascending, then descending, then back to the original order, with empty cells always last.
 - **Restart `jekyll s` after the data changes** (for example after pulling in upstream's updates). `src/` is excluded, so Jekyll doesn't watch it.
-- Not included yet: the game master's other lists (`pokemonTags`, `shadowPokemon`, `rankingScenarios` and so on), the parts in `src/data/gamemaster/`, and the rankings.
+- Not included yet: the game master's other lists (`pokemonTags`, `shadowPokemon`, `rankingScenarios` and so on), the parts in `src/data/gamemaster/`, and the ranking categories other than overall.
 
 ### Site: upstream PvPoke (the PHP site in `src/`)
 - **Running it needs PHP**, not Jekyll. The pages are PHP files and some data is saved by PHP, so a static server isn't enough. Upstream's two ways: Docker (`docker compose up` from `docker/`, then `http://localhost/pvpoke/src/`), or a local PHP + Apache stack such as XAMPP, as in the [PvPoke Wiki installation guide](https://github.com/pvpoke/pvpoke/wiki/Installation). Upstream gives no way to run it like the owner's Jekyll sites (one command from the repo root).
@@ -91,21 +101,23 @@ The owner's fork of PvPoke (pvpoke.com), a public website of tools for Pokémon 
 
 ## Current state
 - **PoGo PvP works on the laptop** (2026-11-18). Verified by running: `bundle exec jekyll build` with no errors or warnings (row counts above), and a test serve on a spare port (the four pages and assets load; `/src/...`, `/CLAUDE.md` and a made-up URL give 404). The filter rules in `table.js` passed 14 test cases in Node.
-- **Owner's browser check (2026-11-18):** sticky header and column, Light/Dark and a narrow window work. Two problems were found and fixed the same day, and are **waiting for a recheck**: (1) sorting and filters did nothing, because `table.js` was never loaded (it was listed in `_layouts/table.html`'s front matter, which the default layout's `page.scripts` doesn't read; the script tag is now in `table.html` itself); (2) the cup rules wrapped so much that one rule was hard to tell from the next (now wider `include`/`exclude` columns, one block per rule, with a hanging indent). The owner rarely uses a narrow window.
+- **Owner's browser check (2026-11-18):** sticky header and column, Light/Dark and a narrow window work. Two problems were found, fixed the same day, and **approved by the owner on recheck**: (1) sorting and filters did nothing, because `table.js` was never loaded (it was listed in `_layouts/table.html`'s front matter, which the default layout's `page.scripts` doesn't read; the script tag is now in `table.html` itself); (2) the cup rules wrapped so much that one rule was hard to tell from the next (now wider `include`/`exclude` columns, one block per rule, with a hanging indent). The owner rarely uses a narrow window.
 - **The desktop hasn't been set up.** Run `bundle install` there first. Ruby 3.2.3 should work, but it hasn't been tried.
 - Upstream's PHP site isn't run anywhere: neither PHP nor Docker is installed on the laptop.
 - Remotes: `origin` = `mrcummings/pvpoke` (the owner's fork), `upstream` = `pvpoke/pvpoke`. `upstream` hasn't been fetched yet.
 
 ## To-do
 ### Next session
-1. [ ] The owner rechecks sorting, filters and the Cups rules in the browser.
+1. [ ] The owner checks the rankings pages in the browser: the dropdown (order, separator, switching, Back button), the rank and name columns staying in view, sorting and filtering.
 2. [ ] Set it up on the desktop (`bundle install`, then run).
 ### Open, not scheduled
 - [ ] Decide how and how often to pull in upstream's updates (`git fetch upstream`, then merge into `master`).
-- [ ] Maybe: tables for the game master's other lists, or for the rankings (246 files; would need a design that doesn't make tens of thousands of pages).
+- [ ] Maybe: a category choice on the rankings (leads, closers and so on), or tables for the game master's other lists.
 - [ ] Maybe: running upstream's PHP site locally (Docker or a PHP install).
 ### Done
 - [x] Added this repo to the template tracker and created CLAUDE.md (2026-11-18).
+- [x] Rankings pages: dropdown plus one table per overall ranking list; built and test-served (2026-11-18). Waiting for the owner's browser check.
+- [x] Owner's browser check of PoGo PvP, including the fixes for script loading and cup rules: approved (2026-11-18).
 - [x] PoGo PvP Jekyll site: home page plus Pokémon, Moves and Cups tables with filters and sorting; blue accent added to `STYLE-GUIDE.md` (here and in game-hub); added to game-hub on port 4014 (2026-11-18).
 
-_Last updated: 2026-11-18 (laptop). PoGo PvP in use; script-loading and cup-rule fixes waiting for the owner's recheck._
+_Last updated: 2026-11-18 (laptop). Rankings pages added and test-served; waiting for the owner's browser check. The desktop isn't set up yet._

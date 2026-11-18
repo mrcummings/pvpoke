@@ -20,4 +20,9 @@ layout: default
     <h2><a class="card-link" href="{{ '/cups/' | relative_url }}">Cups</a></h2>
     <p>{{ gm.tables.cups.rows.size }} cups: the rules for which Pokémon are allowed in each.</p>
   </li>
+  <li class="card">
+    <h2><a class="card-link" href="{{ '/rankings/' | relative_url }}">Rankings</a></h2>
+    {%- assign rk = site.data.rankings %}
+    <p>{{ rk.top.size | plus: rk.rest.size }} {{ rk.category }} ranking lists, one per cup and league, starting with Great League.</p>
+  </li>
 </ul>

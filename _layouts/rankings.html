@@ -1,0 +1,40 @@
+---
+layout: default
+---
+{%- comment -%}
+  One ranking list. These pages are made by _plugins/rankings_pages.rb; there's no file per
+  page. page.ranking: {label, cup, cp, league, url, source}; page.table_data: the table.
+  The dropdown lists every ranking (site.data.rankings); choosing one opens its page
+  (assets/js/rankings.js). Without JavaScript, the list of links below it does the same.
+{%- endcomment -%}
+{%- assign r = page.ranking -%}
+{%- assign menu = site.data.rankings -%}
+{%- assign t = page.table_data -%}
+<div class="page-intro">
+  <h1>Rankings</h1>
+  <form class="ranking-picker" action="{{ '/rankings/' | relative_url }}" data-ranking-picker>
+    <label for="ranking-select">Cup</label>
+    <select id="ranking-select">
+      {%- for o in menu.top %}
+      <option value="{{ o.url | relative_url }}"{% if o.url == r.url %} selected{% endif %}>{{ o.label | xml_escape }}</option>
+      {%- endfor %}
+      <option disabled>──────────</option>
+      {%- for o in menu.rest %}
+      <option value="{{ o.url | relative_url }}"{% if o.url == r.url %} selected{% endif %}>{{ o.label | xml_escape }}</option>
+      {%- endfor %}
+    </select>
+  </form>
+  <noscript>
+    <details class="ranking-links">
+      <summary>All rankings</summary>
+      <ul>
+        {%- for o in menu.top %}<li><a href="{{ o.url | relative_url }}">{{ o.label | xml_escape }}</a></li>{% endfor %}
+        {%- for o in menu.rest %}<li><a href="{{ o.url | relative_url }}">{{ o.label | xml_escape }}</a></li>{% endfor %}
+      </ul>
+    </details>
+  </noscript>
+  <h2>{{ r.label | xml_escape }}</h2>
+  <p class="source">{{ r.league }}, {{ menu.category }} rankings: {{ t.rows.size }} Pokémon, {{ t.columns.size }} columns, from <code>{{ r.source }}</code>.</p>
+</div>
+{% include data-table.html t=t %}
+<script src="{{ '/assets/js/rankings.js' | relative_url }}" defer></script>
