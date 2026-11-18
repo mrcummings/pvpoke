@@ -126,7 +126,7 @@ The owner wants to build their own version with improvements. Nothing has been b
 
 ## To-do
 ### Next session
-1. [ ] **Team Finder step 1 check:** the owner grades 2–3 teams on `/team-finder/` (different leagues), opens each "pvpoke.com" link, presses Rate Team, and compares the four letters. If they match, build step 2; if not, find out why first.
+1. [ ] **Team Finder step 2: the contender pool** (CSV load and export, typed entry, "add top N", per-contender stats). Project paused by the owner on 2026-11-18; start here when they return.
 1. [ ] The owner checks the rankings pages in the browser: the dropdown (order, separator, switching, Back button), the rank and name columns staying in view, sorting and filtering.
 2. [ ] Set it up on the desktop (`bundle install`, then run).
 ### Open, not scheduled
@@ -138,7 +138,7 @@ The owner wants to build their own version with improvements. Nothing has been b
   - **Owner's answers (2026-11-18):** teams of 3 only; contenders from a CSV *and* typed into the page, with CSV export; match upstream's grading exactly for now.
   - **Engine test (2026-11-18, Node, in Claude's scratchpad, not in the repo):** upstream's engine files run outside upstream's pages with a ~20-line stand-in for jQuery (`$.ajax`, `$.getJSON`, `$.each`, and a do-nothing `$()`), plus stand-ins for `InterfaceMaster` and the page globals. It needs the cup's overall rankings loaded first (for threats' recommended movesets) and the meta group. Master League: 410 threats; 2,460 battles in about 1 s (**about 0.4 ms per battle**). **Verified: a team's per-threat rating and score, rebuilt from three single-Pokémon runs, matched the full-team run exactly for all 410 threats** (Dialga Origin / Zacian Crowned / Palkia Origin).
   - **Plan approved 2026-11-18**, with one change from the owner: contenders have a **required CP** (not an optional level); the tool works out the level from species, IVs and CP. Steps:
-    1. **Done 2026-11-18, waiting for the owner's comparison with pvpoke.com.** `/team-finder/` grades one typed-in team: cup (upstream Team Builder's list: Great/Ultra/Master + formats with `showFormat`, limited to those with rankings here), species, CP, IVs, moves (default: the recommended moveset in that cup's rankings). Shows the four grades with their values and goals, each member's level/bulk/safety/consistency, the six top threats, and a link that opens the same team on pvpoke.com's Team Builder (upstream's share-link format, with level and IVs). Level from CP: every half level from 1 to 51 whose CP matches; errors for no match or CP over the cap.
+    1. **Done and verified 2026-11-18:** the owner graded two real teams (Great League, Master League) and the four grades **matched pvpoke.com exactly**. The impossible-CP error caught a real typo in the owner's Palkia Origin; the owner especially liked it, so keep that kind of input checking in later steps (including CSV loading). `/team-finder/` grades one typed-in team: cup (upstream Team Builder's list: Great/Ultra/Master + formats with `showFormat`, limited to those with rankings here), species, CP, IVs, moves (default: the recommended moveset in that cup's rankings). Shows the four grades with their values and goals, each member's level/bulk/safety/consistency, the six top threats, and a link that opens the same team on pvpoke.com's Team Builder (upstream's share-link format, with level and IVs). Level from CP: every half level from 1 to 51 whose CP matches; errors for no match or CP over the cap.
     2. Contender pool: CSV load (`speciesId, ivAtk, ivDef, ivHp, cp, fastMove, chargedMove1, chargedMove2`), typed entry, "add top N from rankings", CSV export (UTF-8 with BOM); each contender's CP, level, IV Rank, Bulk, Safety, Consistency.
     3. Contender × threat battles in the worker, with progress and Cancel.
     4. Every team of 3 graded from those results; target grades, must-include, exclude; GBL rules on by default (no duplicate Pokédex number, at most one Mega); results table (best 500 that qualify, plus a count); closest teams when none qualify.
@@ -149,8 +149,9 @@ The owner wants to build their own version with improvements. Nothing has been b
 - [ ] Maybe: running upstream's PHP site locally (Docker or a PHP install).
 ### Done
 - [x] Added this repo to the template tracker and created CLAUDE.md (2026-11-18).
+- [x] Team Finder step 1 (grade one team); the owner's comparison with pvpoke.com matched exactly (2026-11-18).
 - [x] Rankings pages: dropdown plus one table per overall ranking list; built and test-served (2026-11-18). Waiting for the owner's browser check.
 - [x] Owner's browser check of PoGo PvP, including the fixes for script loading and cup rules: approved (2026-11-18).
 - [x] PoGo PvP Jekyll site: home page plus Pokémon, Moves and Cups tables with filters and sorting; blue accent added to `STYLE-GUIDE.md` (here and in game-hub); added to game-hub on port 4014 (2026-11-18).
 
-_Last updated: 2026-11-18 (laptop). Team Finder step 1 built (grade one team); waiting for the owner's comparison with pvpoke.com. Rankings pages waiting for a browser check. The desktop isn't set up yet._
+_Last updated: 2026-11-18 (laptop). **Paused by the owner.** Team Finder step 1 done and verified against pvpoke.com; next is step 2 (contender pool). Rankings pages still need a browser check. The desktop isn't set up yet._
