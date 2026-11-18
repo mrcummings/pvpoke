@@ -90,14 +90,15 @@ The owner's fork of PvPoke (pvpoke.com), a public website of tools for Pokémon 
 - **Deployment:** none. The fork isn't deployed anywhere.
 
 ## Current state
-- **PoGo PvP works on the laptop** (2026-11-18). Verified by running: `bundle exec jekyll build` with no errors or warnings (row counts above), and a test serve on a spare port (the four pages and assets load; `/src/...`, `/CLAUDE.md` and a made-up URL give 404). The filter rules in `table.js` passed 14 test cases in Node. **Not yet checked in a browser:** sorting, filtering, sticky header and column, the layout on a phone-width window, Light/Dark.
+- **PoGo PvP works on the laptop** (2026-11-18). Verified by running: `bundle exec jekyll build` with no errors or warnings (row counts above), and a test serve on a spare port (the four pages and assets load; `/src/...`, `/CLAUDE.md` and a made-up URL give 404). The filter rules in `table.js` passed 14 test cases in Node.
+- **Owner's browser check (2026-11-18):** sticky header and column, Light/Dark and a narrow window work. Two problems were found and fixed the same day, and are **waiting for a recheck**: (1) sorting and filters did nothing, because `table.js` was never loaded (it was listed in `_layouts/table.html`'s front matter, which the default layout's `page.scripts` doesn't read; the script tag is now in `table.html` itself); (2) the cup rules wrapped so much that one rule was hard to tell from the next (now wider `include`/`exclude` columns, one block per rule, with a hanging indent). The owner rarely uses a narrow window.
 - **The desktop hasn't been set up.** Run `bundle install` there first. Ruby 3.2.3 should work, but it hasn't been tried.
 - Upstream's PHP site isn't run anywhere: neither PHP nor Docker is installed on the laptop.
 - Remotes: `origin` = `mrcummings/pvpoke` (the owner's fork), `upstream` = `pvpoke/pvpoke`. `upstream` hasn't been fetched yet.
 
 ## To-do
 ### Next session
-1. [ ] The owner checks PoGo PvP in the browser (sorting, filters, Light/Dark, a narrow window), from the hub and on its own.
+1. [ ] The owner rechecks sorting, filters and the Cups rules in the browser.
 2. [ ] Set it up on the desktop (`bundle install`, then run).
 ### Open, not scheduled
 - [ ] Decide how and how often to pull in upstream's updates (`git fetch upstream`, then merge into `master`).
@@ -107,4 +108,4 @@ The owner's fork of PvPoke (pvpoke.com), a public website of tools for Pokémon 
 - [x] Added this repo to the template tracker and created CLAUDE.md (2026-11-18).
 - [x] PoGo PvP Jekyll site: home page plus Pokémon, Moves and Cups tables with filters and sorting; blue accent added to `STYLE-GUIDE.md` (here and in game-hub); added to game-hub on port 4014 (2026-11-18).
 
-_Last updated: 2026-11-18 (laptop). PoGo PvP built and test-served; waiting for the owner's browser check._
+_Last updated: 2026-11-18 (laptop). PoGo PvP in use; script-loading and cup-rule fixes waiting for the owner's recheck._

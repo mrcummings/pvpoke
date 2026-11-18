@@ -1,9 +1,9 @@
 ---
 layout: default
-scripts:
-  - /assets/js/table.js
 ---
 {%- assign gm = site.data.gamemaster -%}
+{%- capture nl %}
+{% endcapture -%}
 {%- assign t = gm.tables[page.table] -%}
 <div class="page-intro">
   <h1>{{ page.title | xml_escape }}</h1>
@@ -18,7 +18,16 @@ scripts:
 <table class="data" data-table>
 <thead><tr>{% for c in t.columns %}<th scope="col"{% if c.numeric %} class="num"{% endif %}>{{ c.label | xml_escape }}</th>{% endfor %}</tr></thead>
 <tbody>
-{% for row in t.rows %}<tr>{% for cell in row %}{% if forloop.first %}<th scope="row">{{ cell | xml_escape }}</th>{% else %}<td{% if t.columns[forloop.index0].numeric %} class="num"{% endif %}>{{ cell | xml_escape }}</td>{% endif %}{% endfor %}</tr>
+{%- comment -%}
+  A cell holding several entries (a cup's include/exclude rules) has one entry per line.
+  Each becomes its own <span class="line">, so a long entry wraps with a hanging indent.
+{%- endcomment %}
+{% for row in t.rows %}<tr>{% for cell in row %}{% if forloop.first %}<th scope="row">{{ cell | xml_escape }}</th>{% elsif cell contains nl %}<td class="multi">{% assign lines = cell | split: nl %}{% for l in lines %}<span class="line">{{ l | xml_escape }}</span>{% endfor %}</td>{% else %}<td{% if t.columns[forloop.index0].numeric %} class="num"{% endif %}>{{ cell | xml_escape }}</td>{% endif %}{% endfor %}</tr>
 {% endfor %}</tbody>
 </table>
 </div>
+{%- comment -%}
+  Loaded here rather than through the default layout's page.scripts, which only reads the
+  page's own front matter, not this layout's.
+{%- endcomment %}
+<script src="{{ '/assets/js/table.js' | relative_url }}" defer></script>

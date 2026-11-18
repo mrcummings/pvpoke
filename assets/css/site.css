@@ -115,6 +115,12 @@ table.data th, table.data td {
   overflow-wrap: anywhere;
 }
 table.data td { min-width: 4rem; }
+
+/* Cells with several entries, one per line (a cup's include/exclude rules): wider, and each
+ * entry wraps with a hanging indent so it's clear where the next one starts. */
+table.data td.multi { min-width: 24rem; max-width: 64rem; }
+table.data td.multi .line { display: block; padding-left: 1.5em; text-indent: -1.5em; }
+table.data td.multi .line + .line { margin-top: 0.35em; }
 table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
 table.data tbody tr:nth-child(even) > * { background: var(--panel); }
 table.data tbody tr:nth-child(odd) > * { background: var(--surface); }

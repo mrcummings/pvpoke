@@ -26,7 +26,13 @@
 
   // Read every row once.
   var rows = Array.prototype.slice.call(tbody.rows).map(function (tr, i) {
-    var text = Array.prototype.map.call(tr.cells, function (c) { return c.textContent; });
+    var text = Array.prototype.map.call(tr.cells, function (c) {
+      // A multi-entry cell (one <span class="line"> per entry): keep the entries apart.
+      var lines = c.querySelectorAll(".line");
+      return lines.length
+        ? Array.prototype.map.call(lines, function (l) { return l.textContent; }).join("\n")
+        : c.textContent;
+    });
     return {
       el: tr,
       index: i,
