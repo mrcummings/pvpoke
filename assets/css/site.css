@@ -1,0 +1,165 @@
+/* site.css: PoGo PvP's own styles. Loaded after the shared theme.css (see STYLE-GUIDE.md).
+ * Accent: blue. Contrast checked against --bg, --surface and --panel in both modes
+ * (light 5.7:1 or more; dark 6.7:1 or more). */
+:root { --accent-light: #2f5a9e; --accent-dark: #8fb3ea; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* ---- Header: title at left, 8px accent underline, toggle at right ---- */
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 16px;
+  background: var(--surface);
+  border-bottom: 8px solid var(--accent);
+}
+.site-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.site-nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-right: auto; }
+.site-nav a { text-decoration: none; padding: 0.1rem 0; border-bottom: 2px solid transparent; }
+.site-nav a:hover { border-bottom-color: var(--accent); }
+.site-nav a[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
+
+main { padding: 1rem 16px 2rem; }
+
+.page-intro { max-width: 60rem; }
+.page-intro h1 { margin: 0.25rem 0 0.5rem; }
+.source { color: var(--muted); font-size: 0.9rem; }
+
+/* ---- Home page cards (the whole card is clickable) ---- */
+.cards {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+  max-width: 60rem;
+}
+.card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 6px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0.75rem 1rem 1rem;
+}
+.card:hover { border-color: var(--accent); }
+.card h2 { margin: 0 0 0.25rem; font-size: 1.35rem; }
+.card p { margin: 0; color: var(--muted); }
+.card-link { text-decoration: none; }
+.card-link::after { content: ""; position: absolute; inset: 0; }
+
+/* ---- Table controls (added by table.js) ---- */
+.table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.table-controls input[type="search"] {
+  font: inherit;
+  width: min(24rem, 100%);
+}
+.table-controls .count { color: var(--muted); font-size: 0.9rem; }
+.table-controls .help { color: var(--muted); font-size: 0.85rem; flex-basis: 100%; margin: 0; }
+
+input[type="search"], .table-controls button {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.3em 0.5em;
+}
+.table-controls button { cursor: pointer; padding: 0.3em 0.7em; font-size: 0.9rem; }
+.table-controls button:hover { border-color: var(--accent); }
+input[type="search"]:focus-visible { border-color: var(--accent); }
+
+/* ---- The data table ----
+ * It scrolls inside its own box (both ways), with the header row and the first column
+ * kept in view. The page itself never scrolls sideways. */
+.table-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 6rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+table.data {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+table.data th, table.data td {
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-line;          /* keeps the one-rule-per-line cup filters */
+  max-width: 32rem;
+  overflow-wrap: anywhere;
+}
+table.data td { min-width: 4rem; }
+table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data tbody tr:nth-child(even) > * { background: var(--panel); }
+table.data tbody tr:nth-child(odd) > * { background: var(--surface); }
+/* With table.js, stripes follow the visible rows (hidden rows would break nth-child). */
+table.data.js tbody tr > * { background: var(--surface); }
+table.data.js tbody tr.alt > * { background: var(--panel); }
+table.data tbody tr:hover > * { background: var(--accent-soft); }
+
+table.data thead { position: sticky; top: 0; z-index: 2; }
+table.data thead th, table.data thead td {
+  background: var(--surface);
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+table.data thead tr:last-child > * { border-bottom: 2px solid var(--border); }
+
+/* First column: the record's name, kept in view while scrolling sideways */
+table.data tr > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  border-right: 1px solid var(--border);
+}
+table.data thead tr > :first-child { z-index: 3; }
+table.data tbody th { font-weight: 600; white-space: nowrap; }
+
+/* Sort buttons in the header (added by table.js) */
+.sort {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.3em;
+  align-items: baseline;
+}
+.sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sort::after { content: "↕"; color: var(--muted); font-size: 0.85em; }
+th[aria-sort="ascending"] .sort::after { content: "▲"; color: var(--accent); }
+th[aria-sort="descending"] .sort::after { content: "▼"; color: var(--accent); }
+
+/* Per-column filter boxes (second header row, added by table.js) */
+table.data .filters input {
+  width: 100%;
+  min-width: 5rem;
+  font-size: 0.8rem;
+  padding: 0.15em 0.35em;
+  font-weight: 400;
+}

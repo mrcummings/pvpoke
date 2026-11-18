@@ -1,0 +1,23 @@
+---
+layout: default
+---
+{%- assign gm = site.data.gamemaster -%}
+<div class="page-intro">
+  <h1>{{ site.title | xml_escape }}</h1>
+  <p>Browse the data behind <a href="https://pvpoke.com">PvPoke</a>, read straight from <code>{{ gm.source }}</code> in this repo. The game master was last updated {{ gm.timestamp }}.</p>
+</div>
+
+<ul class="cards">
+  <li class="card">
+    <h2><a class="card-link" href="{{ '/pokemon/' | relative_url }}">Pokémon</a></h2>
+    <p>{{ gm.tables.pokemon.rows.size }} Pokémon and forms: base stats, types, movesets, default IVs, tags and families.</p>
+  </li>
+  <li class="card">
+    <h2><a class="card-link" href="{{ '/moves/' | relative_url }}">Moves</a></h2>
+    <p>{{ gm.tables.moves.rows.size }} fast and charged moves: type, power, energy, turns and stat effects.</p>
+  </li>
+  <li class="card">
+    <h2><a class="card-link" href="{{ '/cups/' | relative_url }}">Cups</a></h2>
+    <p>{{ gm.tables.cups.rows.size }} cups: the rules for which Pokémon are allowed in each.</p>
+  </li>
+</ul>

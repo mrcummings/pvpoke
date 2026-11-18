@@ -1,0 +1,111 @@
+/* theme.css: shared look for the game projects (game-hub, pkmn-tracker, tes-lore, eu4map).
+ *
+ * SHARED FILE. Every project holds an identical copy. Don't edit a project's copy on its own:
+ * change STYLE-GUIDE.md (master in Google Drive, "GH-Projects") first, then copy this file
+ * into every repo.
+ *
+ * Load it BEFORE the project's own stylesheet. The project's stylesheet sets its accent:
+ *   :root { --accent-light: #......; --accent-dark: #......; }
+ *
+ * Theme: assets/js/theme.js sets <html data-theme="light|dark">. Without JavaScript, the
+ * page follows the system setting through the media query below.
+ */
+
+/* ---- Light (default) ---- */
+:root {
+  --bg: #f7f5f0;          /* page background */
+  --surface: #fffdf9;     /* cards, bars, raised areas */
+  --panel: #efebe2;       /* inset areas, table stripes, chips */
+  --text: #26231f;
+  --muted: #6b655b;       /* secondary text */
+  --border: #ddd6c9;
+  --ok: #286b35;
+  --warn: #7d5600;
+  --danger: #b3362b;
+  --on-accent: #ffffff;   /* text on an accent-filled button */
+  --shadow: 0 2px 8px rgb(38 35 31 / 0.08);
+
+  --accent: var(--accent-light, #6b655b);
+
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: Georgia, "Times New Roman", serif;
+  --font-text: Georgia, "Times New Roman", serif;   /* long-form reading text */
+  --font-mono: ui-monospace, Consolas, monospace;
+
+  --radius-sm: 4px;       /* inputs, buttons, chips */
+  --radius: 8px;          /* cards, panels, menus */
+
+  color-scheme: light;
+}
+
+/* ---- Dark: chosen with the toggle ---- */
+:root[data-theme="dark"] {
+  --bg: #1c1a17;
+  --surface: #25221e;
+  --panel: #2d2a25;
+  --text: #ebe6dc;
+  --muted: #a59f93;
+  --border: #3d3933;
+  --ok: #6cc283;
+  --warn: #e0b04a;
+  --danger: #ef8476;
+  --on-accent: #1c1a17;
+  --shadow: 0 2px 10px rgb(0 0 0 / 0.35);
+  --accent: var(--accent-dark, #a59f93);
+  color-scheme: dark;
+}
+
+/* ---- Dark: system setting, when no choice has been made (or JavaScript is off) ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #1c1a17;
+    --surface: #25221e;
+    --panel: #2d2a25;
+    --text: #ebe6dc;
+    --muted: #a59f93;
+    --border: #3d3933;
+    --ok: #6cc283;
+    --warn: #e0b04a;
+    --danger: #ef8476;
+    --on-accent: #1c1a17;
+    --shadow: 0 2px 10px rgb(0 0 0 / 0.35);
+    --accent: var(--accent-dark, #a59f93);
+    color-scheme: dark;
+  }
+}
+
+/* A faint wash of the accent, for active or selected states. */
+:root { --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+
+/* ---- Base ---- */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3 { font-family: var(--font-heading); font-weight: 500; }
+
+a { color: var(--accent); }
+
+code, kbd, pre, samp { font-family: var(--font-mono); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- Light/Dark toggle (markup in STYLE-GUIDE.md; behavior in theme.js) ---- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font: inherit;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.3em 0.7em;
+  cursor: pointer;
+}
+.theme-toggle:hover { border-color: var(--accent); }
+.theme-toggle[hidden] { display: none; }

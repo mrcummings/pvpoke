@@ -1,0 +1,24 @@
+---
+layout: default
+scripts:
+  - /assets/js/table.js
+---
+{%- assign gm = site.data.gamemaster -%}
+{%- assign t = gm.tables[page.table] -%}
+<div class="page-intro">
+  <h1>{{ page.title | xml_escape }}</h1>
+  {{ content }}
+  <p class="source">{{ t.rows.size }} rows, {{ t.columns.size }} columns, from <code>{{ gm.source }}</code> (game master updated {{ gm.timestamp }}).</p>
+</div>
+{%- comment -%}
+  The table is complete without JavaScript. assets/js/table.js adds the filter boxes and
+  the click-to-sort headers. Column labels are the field names in the JSON.
+{%- endcomment %}
+<div class="table-wrap">
+<table class="data" data-table>
+<thead><tr>{% for c in t.columns %}<th scope="col"{% if c.numeric %} class="num"{% endif %}>{{ c.label | xml_escape }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for row in t.rows %}<tr>{% for cell in row %}{% if forloop.first %}<th scope="row">{{ cell | xml_escape }}</th>{% else %}<td{% if t.columns[forloop.index0].numeric %} class="num"{% endif %}>{{ cell | xml_escape }}</td>{% endif %}{% endfor %}</tr>
+{% endfor %}</tbody>
+</table>
+</div>

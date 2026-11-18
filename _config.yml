@@ -1,0 +1,29 @@
+# PoGo PvP: a Jekyll site for browsing PvPoke's game master data.
+# Run from the repo root:  bundle exec jekyll s   then open http://localhost:4014
+#
+# This site is the owner's addition to the fork; upstream PvPoke (the PHP site) lives in src/.
+# The data is read in place from src/data/gamemaster.json by _plugins/gamemaster_tables.rb.
+# Nothing is copied, so src/data stays the single source of truth.
+
+title: PoGo PvP
+description: Pokémon, moves and cups from PvPoke's game master data.
+baseurl: ""
+# 4014: this project's port in game-hub's port registry.
+port: 4014
+
+# The data file the plugin reads, relative to the repo root.
+gamemaster: src/data/gamemaster.json
+
+# Jekyll 4 adds these to its built-in list (Gemfile, vendor, dotfiles, _folders and so on).
+# src/ is the upstream PHP site (138 MB) and must stay out of the build. Excluded folders
+# aren't watched either: after the data changes, restart `jekyll s`.
+exclude:
+  - src
+  - docker
+  - LICENSE
+  - README.md
+  - AGENTS.md
+  - CLAUDE.md
+  - CLAUDE-TEMPLATE.md
+  - HUMANS.md
+  - STYLE-GUIDE.md

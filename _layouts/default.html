@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.title %}{{ page.title | xml_escape }} · {% endif %}{{ site.title | xml_escape }}</title>
+  <meta name="description" content="{{ site.description | xml_escape }}">
+  <script src="{{ '/assets/js/theme.js' | relative_url }}"></script>
+  <link rel="stylesheet" href="{{ '/assets/css/theme.css' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title | xml_escape }}</a>
+    <nav class="site-nav" aria-label="Data">
+      <a href="{{ '/pokemon/' | relative_url }}"{% if page.url == '/pokemon/' %} aria-current="page"{% endif %}>Pokémon</a>
+      <a href="{{ '/moves/' | relative_url }}"{% if page.url == '/moves/' %} aria-current="page"{% endif %}>Moves</a>
+      <a href="{{ '/cups/' | relative_url }}"{% if page.url == '/cups/' %} aria-current="page"{% endif %}>Cups</a>
+    </nav>
+    <button type="button" class="theme-toggle" data-theme-toggle hidden>Theme</button>
+  </header>
+  <main>
+    {{ content }}
+  </main>
+  {% if page.scripts %}{% for s in page.scripts %}
+  <script src="{{ s | relative_url }}" defer></script>
+  {% endfor %}{% endif %}
+</body>
+</html>

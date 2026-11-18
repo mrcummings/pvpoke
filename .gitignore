@@ -1,3 +1,11 @@
 src/modules/config.php
 src/articles/article-assets
 src-deploy/
+
+# Jekyll site at the repo root (the owner's data viewer; not part of upstream PvPoke)
+_site/
+.jekyll-cache/
+.jekyll-metadata
+.sass-cache/
+.bundle/
+vendor/
