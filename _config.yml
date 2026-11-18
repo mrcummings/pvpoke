@@ -18,8 +18,9 @@ rankings: src/data/rankings
 rankings_category: overall
 
 # Jekyll 4 adds these to its built-in list (Gemfile, vendor, dotfiles, _folders and so on).
-# src/ is the upstream PHP site (138 MB) and must stay out of the build. Excluded folders
-# aren't watched either: after the data changes, restart `jekyll s`.
+# src/ is the upstream PHP site (138 MB) and must stay out of the build. The only exception:
+# _plugins/upstream_files.rb publishes the Team Finder's engine files and data from src/
+# (about 80 files). Excluded folders aren't watched: after the data changes, restart `jekyll s`.
 exclude:
   - src
   - docker

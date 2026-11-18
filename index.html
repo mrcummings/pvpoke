@@ -25,4 +25,8 @@ layout: default
     {%- assign rk = site.data.rankings %}
     <p>{{ rk.top.size | plus: rk.rest.size }} {{ rk.category }} ranking lists, one per cup and league, starting with Great League.</p>
   </li>
+  <li class="card">
+    <h2><a class="card-link" href="{{ '/team-finder/' | relative_url }}">Team Finder</a></h2>
+    <p>Grade a team of three with upstream's battle engine, matching pvpoke.com's Team Builder. Searching for teams comes next.</p>
+  </li>
 </ul>

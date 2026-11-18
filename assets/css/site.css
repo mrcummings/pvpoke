@@ -78,6 +78,72 @@ main { padding: 1rem 16px 2rem; }
 .ranking-picker select:hover { border-color: var(--accent); }
 .page-intro h2 { margin: 0.75rem 0 0; font-size: 1.35rem; }
 
+/* ---- Team Finder ---- */
+.notice { padding: 0.75rem 1rem; background: var(--panel); border-radius: var(--radius); }
+.team-form { max-width: 72rem; }
+.team-form .field { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.6rem; }
+.team-form label { font-size: 0.85rem; font-weight: 600; }
+.team-form input, .team-form select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35em 0.5em;
+  width: 100%;
+  min-width: 0;
+}
+.team-form input:focus-visible, .team-form select:focus-visible { border-color: var(--accent); }
+.team-form > .field { max-width: 24rem; }
+.members {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem;
+  margin: 0.5rem 0 1rem;
+}
+.member {
+  margin: 0;
+  padding: 0.5rem 1rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.member legend { font-family: var(--font-heading); font-size: 1.1rem; padding: 0 0.3rem; }
+.field-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 0.5rem; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+button.primary {
+  font: inherit;
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.45em 1.1em;
+  cursor: pointer;
+}
+button.primary:disabled { opacity: 0.55; cursor: progress; }
+.status { color: var(--muted); }
+.status.error { color: var(--danger); font-weight: 600; }
+
+.results { max-width: 72rem; margin-top: 1.5rem; }
+.results h2 { margin: 1.5rem 0 0.5rem; }
+.results .table-wrap { max-height: none; }
+.grades { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; }
+.grade-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 6px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem 0.75rem;
+}
+.grade-card h3 { margin: 0; font-size: 1.1rem; }
+.grade-card .letter { font-family: var(--font-heading); font-size: 2.6rem; line-height: 1.1; margin: 0.2rem 0; }
+.grade-card .value, .grade-card .goal { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.grade-card[data-grade="A"] { border-top-color: var(--ok); }
+.grade-card[data-grade="D"], .grade-card[data-grade="F"] { border-top-color: var(--danger); }
+.check { margin-top: 1rem; }
+
 /* ---- Table controls (added by table.js) ---- */
 .table-controls {
   display: flex;
