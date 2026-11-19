@@ -5,9 +5,12 @@
 // Every message carries the job's id (common.js matches answers to jobs). Jobs run one at a time.
 // Messages in:   { id, type: "grade", cup, cp, meta, team: [contender, contender, contender] }
 //                { id, type: "evaluate", cup, cp, contenders: [contender, ...] }   (no battles)
+//                { id, type: "battles", cup, cp, meta, contenders: [contender, ...] }
+//                { type: "cancel", target: id }   (stops a "battles" job between contenders)
 //   contender:   { speciesId, ivs: {atk, def, hp}, cp, fastMove, chargedMoves: [id, id or "none"] }
 //                Without ivs and cp, the species gets upstream's default IVs and level for the league.
-// Messages out:  { id, type: "progress", text }   { id, type: "result", ... }   { id, type: "error", message }
+// Messages out:  { id, type: "progress", text, done, total }   { id, type: "result", ... }
+//                { id, type: "error", message }
 //
 // How a team is graded (matching upstream's Team Builder, src/js/interface/TeamInterface.js,
 // updateTeamResults, with its default options):
@@ -98,7 +101,7 @@ var gm = GameMaster.getInstance();
 var currentId = 0;        // the job being worked on
 var currentReject = null; // ends it with an error
 function fail(message) { self.postMessage({ id: currentId, type: "error", message: message }); }
-function progress(text) { self.postMessage({ id: currentId, type: "progress", text: text }); }
+function progress(text, done, total) { self.postMessage({ id: currentId, type: "progress", text: text, done: done, total: total }); }
 function reply(result) { result.id = currentId; result.type = "result"; self.postMessage(result); }
 
 function loadRankings(cup, cp) {
@@ -192,7 +195,10 @@ function buildMember(battle, m, leagueCP) {
   return { pokemon: p, level: level, otherLevels: levels.slice(0, -1) };
 }
 
-async function grade(msg) {
+// ---- Shared setup for a cup: rankings, meta group, battle, and upstream's default options ----
+var allowShadows = true; // Team Builder's "Show Shadow Pokemon in results": on
+
+async function prepare(msg) {
   await gmLoaded;
   var cp = Number(msg.cp);
   var cupName = msg.cup;
@@ -205,15 +211,10 @@ async function grade(msg) {
   battle.setCP(cp);
   battle.setCup(cupName);
 
-  var built = msg.team.map(function (m) { return buildMember(battle, m, cp); });
-  var team = built.map(function (b) { return b.pokemon; });
-
   // Upstream's default Team Builder options
-  var allowShadows = true;           // "Show Shadow Pokemon in results": on
   var prioritizeMetaThreats = true;  // "Prioritize meta threats": on
   var baitShields = 1;               // "Shield Baiting": on
   var shieldCount = 1;               // "Shields": Average (0 & 1) => shieldMode "average"
-  if (cupName == "shadow") allowShadows = true;
 
   var teamSettings = getDefaultMultiBattleSettings();
   var opponentSettings = getDefaultMultiBattleSettings();
@@ -229,30 +230,83 @@ async function grade(msg) {
   ranker.setRecommendMoveUsage(true);
   ranker.setTargets([]);
 
-  // 1. Each member against every threat, on its own
+  return { cp: cp, cupName: cupName, battle: battle, ranker: ranker, cache: cupCache(cupName, cp) };
+}
+
+// ---- Battle results, kept for as long as the page is open ----
+// Per cup: the threats (the cup's eligible Pokémon, in upstream's original order) and, per
+// contender, each threat's rating and score against it. A contender's results don't depend on
+// its teammates, so they're worked out once and reused for every team it's in (and by "grade").
+var battleCaches = {};
+
+function cupCache(cupName, cp) {
+  var k = cupName + "/" + cp;
+  if (!battleCaches[k]) battleCaches[k] = { threats: null, index: null, results: {} };
+  return battleCaches[k];
+}
+
+function contenderKey(p) {
+  return [p.speciesId, p.ivs.atk, p.ivs.def, p.ivs.hp, p.cp, p.fastMove.moveId]
+    .concat(p.chargedMoves.filter(Boolean).map(function (mv) { return mv.moveId; })).join("|");
+}
+
+// Runs (or reuses) one contender's battles against every threat. Returns
+// { rating: Int16Array, score: Float64Array }, aligned with cache.threats.
+// rating is the threat's battle rating (500 even, below 500 = the contender wins).
+function battlesFor(ctx, p) {
+  var cache = ctx.cache;
+  var k = contenderKey(p);
+  if (cache.results[k]) return cache.results[k];
+
+  var data = ctx.ranker.rank([p], ctx.cp, ctx.battle.getCup(), [], "team-counters");
+  if (!cache.threats) {
+    var ordered = data.rankings.slice().sort(function (a, b) { return a.index - b.index; });
+    cache.threats = ordered.map(function (r) { return { speciesId: r.speciesId, speciesName: r.speciesName, pokemon: r.pokemon }; });
+    cache.index = {};
+    cache.threats.forEach(function (t, i) { cache.index[t.speciesId] = i; });
+  }
+  var n = cache.threats.length;
+  var res = { rating: new Int16Array(n), score: new Float64Array(n) };
+  if (data.rankings.length !== n) throw new Error("The threat list changed between contenders (" + data.rankings.length + " vs " + n + ").");
+  data.rankings.forEach(function (r) {
+    var i = cache.index[r.speciesId];
+    if (i === undefined) throw new Error("Unexpected threat: " + r.speciesId);
+    res.rating[i] = r.matchups[0].rating;
+    res.score[i] = r.matchups[0].score;
+  });
+  cache.results[k] = res;
+  return res;
+}
+
+async function grade(msg) {
+  var ctx = await prepare(msg);
+  var cp = ctx.cp, cupName = ctx.cupName, battle = ctx.battle;
+
+  var built = msg.team.map(function (m) { return buildMember(battle, m, cp); });
+  var team = built.map(function (b) { return b.pokemon; });
+
+  // 1. Each member against every threat, on its own (or from earlier battles)
   var singles = [];
   var t0 = Date.now();
   for (var i = 0; i < team.length; i++) {
     progress("Simulating " + team[i].speciesName + " (" + (i + 1) + " of " + team.length + ")…");
-    var data = ranker.rank([team[i]], cp, battle.getCup(), [], "team-counters");
-    var byId = {};
-    data.rankings.forEach(function (r) { byId[r.speciesId] = r; });
-    singles.push({ rankings: data.rankings, byId: byId });
+    singles.push(battlesFor(ctx, team[i]));
   }
-  var battleCount = singles[0].rankings.length * team.length * 2;
+  var threatList = ctx.cache.threats;
+  var battleCount = threatList.length * team.length * 2;
   var ms = Date.now() - t0;
 
-  // Rebuild the team's result per threat, in upstream's original threat order
-  var combined = singles[0].rankings.slice().sort(function (a, b) { return a.index - b.index; }).map(function (r0) {
+  // Rebuild the team's result per threat, in upstream's original threat order:
+  // rating = floor(sum / members), score = sum / members
+  var combined = threatList.map(function (t, ti) {
     var sumRating = 0, sumScore = 0, ratings = [];
     for (var n = 0; n < singles.length; n++) {
-      var m = singles[n].byId[r0.speciesId].matchups[0];
-      sumRating += m.rating;
-      sumScore += m.score;
-      ratings.push(m.rating);
+      sumRating += singles[n].rating[ti];
+      sumScore += singles[n].score[ti];
+      ratings.push(singles[n].rating[ti]);
     }
     return {
-      pokemon: r0.pokemon, speciesId: r0.speciesId, speciesName: r0.speciesName,
+      pokemon: t.pokemon, speciesId: t.speciesId, speciesName: t.speciesName,
       rating: Math.floor(sumRating / team.length), score: sumScore / team.length, ratings: ratings
     };
   });
@@ -373,12 +427,66 @@ async function evaluate(msg) {
   reply({ contenders: out, bulkGoal: bulkGoal(cp, cupName), ms: Date.now() - t0 });
 }
 
+// ---- Contender x threat battles (step 3) ----
+// Every contender against every threat in the cup, kept in the cache for the search (step 4).
+// Contenders already done are skipped. Between contenders the worker pauses briefly, so a
+// "cancel" message can get in; then it stops and replies with cancelled: true, and the
+// contenders it finished stay done.
+// Result per contender: { ok, wins, losses, ties, fresh }, { ok: false, error }, or
+// { ok: true, pending: true } (not battled: the run was cancelled first).
+async function battles(msg) {
+  var ctx = await prepare(msg);
+  var built = msg.contenders.map(function (m) {
+    try { return buildMember(ctx.battle, m, ctx.cp).pokemon; } catch (err) { return { error: err.message || String(err) }; }
+  });
+  var todo = built.filter(function (p) { return !p.error && !ctx.cache.results[contenderKey(p)]; });
+
+  var t0 = Date.now();
+  var fresh = {};
+  var ran = 0, stopped = false;
+  for (var i = 0; i < todo.length; i++) {
+    var elapsed = Date.now() - t0;
+    var left = i > 0 ? Math.round(elapsed / i * (todo.length - i) / 1000) : null;
+    progress("Battling: " + todo[i].speciesName + " (" + (i + 1) + " of " + todo.length + ")" +
+      (left !== null ? ", about " + left + " s left" : "") + "…", i, todo.length);
+    await new Promise(function (r) { setTimeout(r, 0); }); // let a "cancel" message in
+    if (cancelled[currentId]) { stopped = true; break; }
+    battlesFor(ctx, todo[i]);
+    fresh[contenderKey(todo[i])] = true;
+    ran++;
+  }
+  delete cancelled[currentId];
+
+  var threats = ctx.cache.threats ? ctx.cache.threats.length : 0;
+  reply({
+    cancelled: stopped,
+    threats: threats,
+    ran: ran,
+    battles: ran * threats * 2,
+    ms: Date.now() - t0,
+    contenders: built.map(function (p) {
+      if (p.error) return { ok: false, error: p.error };
+      var res = ctx.cache.results[contenderKey(p)];
+      if (!res) return { ok: true, pending: true };
+      var wins = 0, losses = 0;
+      for (var t = 0; t < res.rating.length; t++) {
+        if (res.rating[t] < 500) wins++;
+        else if (res.rating[t] > 500) losses++;
+      }
+      return { ok: true, wins: wins, losses: losses, ties: res.rating.length - wins - losses, fresh: !!fresh[contenderKey(p)] };
+    })
+  });
+}
+
 // ---- Jobs, one at a time in the order they arrive ----
-var jobs = { grade: grade, evaluate: evaluate };
+// { type: "cancel", target: id } isn't queued: it marks that job, which stops at its next pause.
+var jobs = { grade: grade, evaluate: evaluate, battles: battles };
 var queue = Promise.resolve();
+var cancelled = {};
 
 self.onmessage = function (e) {
   var msg = e.data || {};
+  if (msg.type === "cancel") { cancelled[msg.target] = true; return; }
   queue = queue.then(function () {
     return new Promise(function (resolve, reject) {
       currentId = msg.id;

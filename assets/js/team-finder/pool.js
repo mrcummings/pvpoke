@@ -10,6 +10,9 @@
 //   that fail the check aren't added; the reasons are listed above the table.
 // - Repeats (same species, IVs, CP, fast move and pair of charged moves) are skipped.
 // - Export CSV writes the input columns (which load back in), then the worked-out values.
+// - Run battles (step 3): every contender against every Pokémon in the cup, in the worker,
+//   with progress and Cancel. The worker keeps the results for the search; this page shows
+//   each contender's Wins. Results last until the page is closed or reloaded.
 //
 // CSV columns, any order, not case-sensitive, other columns ignored:
 //   speciesId, ivAtk, ivDef, ivHp, cp, fastMove, chargedMove1, chargedMove2
@@ -32,7 +35,14 @@
   var fileInput = section.querySelector("[data-csv-file]");
   var addForm = section.querySelector("[data-add-form]");
   var addFs = addForm.querySelector("fieldset");
-  var buttons = Array.prototype.slice.call(section.querySelectorAll("button"));
+  var runWrap = section.querySelector("[data-battle-run]");
+  var runBtn = section.querySelector("[data-run-battles]");
+  var cancelBtn = section.querySelector("[data-cancel-battles]");
+  var progressEl = section.querySelector("[data-battle-progress]");
+  var battleStatus = section.querySelector("[data-battle-status]");
+  // Every button but Cancel is disabled while a job runs
+  var buttons = Array.prototype.slice.call(section.querySelectorAll("button"))
+    .filter(function (b) { return b !== cancelBtn; });
 
   var STORE = "team-finder-pool:";
   var INPUT_COLUMNS = ["speciesId", "ivAtk", "ivDef", "ivHp", "cp", "fastMove", "chargedMove1", "chargedMove2"];
@@ -41,6 +51,7 @@
   var entries = [];      // what was entered: { speciesId, ivs, cp, fastMove, chargedMoves: [c1, c2 or "none"] }
   var info = {};         // key(entry) -> the worker's result for it, in this cup
   var bulkGoal = 0;
+  var battleResults = {}; // cup key -> { threats: N, byKey: { key(entry) -> { wins, losses, ties } } }
   var busy = false;
   var sortCol = -1, sortDir = 0;
 
@@ -54,6 +65,7 @@
     busyCount = Math.max(0, busyCount + (on ? 1 : -1));
     busy = busyCount > 0;
     buttons.forEach(function (b) { b.disabled = busy; });
+    if (cup) updateRun(); // the Run button also depends on whether anything is left to battle
   }
   function showProblems(list) {
     problemsEl.innerHTML = "";
@@ -89,7 +101,7 @@
     var todo = list.concat(entries.filter(function (e) { return !info[key(e)]; }));
     if (!todo.length) return Promise.resolve([]);
     var forCup = cup;
-    return TF.request({ type: "evaluate", cup: forCup.cup, cp: forCup.cp, contenders: todo }, setStatus)
+    return TF.request({ type: "evaluate", cup: forCup.cup, cp: forCup.cp, contenders: todo }, function (t) { setStatus(t); })
       .then(function (r) {
         if (forCup !== cup) throw new Error("stale"); // the cup changed meanwhile
         bulkGoal = r.bulkGoal;
@@ -163,14 +175,39 @@
     { label: "Consistency", num: true, value: function (e, r) { return r && r.ok ? r.consistency : null; },
       good: function (v) { return v >= 0.9 * 98; } },
     { label: "Cup rank", num: true, value: function (e, r) { return r && r.ok ? r.rank : null; },
-      text: function (e, r) { return r && r.ok ? (r.rank ? "#" + r.rank : "not ranked") : ""; } }
+      text: function (e, r) { return r && r.ok ? (r.rank ? "#" + r.rank : "not ranked") : ""; } },
+    { label: "Wins", num: true, value: function (e, r, b) { return b ? b.wins : null; } }
   ];
+
+  function cupBattles() {
+    if (!battleResults[cup.key]) battleResults[cup.key] = { threats: 0, byKey: {} };
+    return battleResults[cup.key];
+  }
+  // Contenders that check out but haven't battled yet (in this cup, since the page opened)
+  function needBattles() {
+    var done = cupBattles().byKey;
+    return entries.filter(function (e) { var r = info[key(e)]; return r && r.ok && !done[key(e)]; });
+  }
+  function updateRun() {
+    runWrap.hidden = entries.length === 0;
+    var todo = needBattles().length;
+    var b = cupBattles();
+    runBtn.textContent = todo === 0 ? "Battles done" : "Run battles for " + todo + " contender" + (todo === 1 ? "" : "s");
+    runBtn.disabled = busy || todo === 0;
+    if (!busy) {
+      var done = Object.keys(b.byKey).length;
+      battleStatus.classList.remove("error");
+      battleStatus.textContent = done && todo === 0 ? "Every contender has battled all " + b.threats.toLocaleString() + " Pokémon in this cup." : "";
+    }
+  }
 
   function render() {
     table.innerHTML = "";
     wrap.hidden = entries.length === 0;
     noteEl.hidden = entries.length === 0;
+    updateRun();
     if (!entries.length) return;
+    var fought = cupBattles();
 
     var headRow = el("tr");
     COLUMNS.forEach(function (c, i) {
@@ -190,12 +227,12 @@
     headRow.appendChild(el("th", { scope: "col", text: "" }));
     table.appendChild(el("thead", null, [headRow]));
 
-    var rows = entries.map(function (e, i) { return { e: e, r: info[key(e)], i: i }; });
+    var rows = entries.map(function (e, i) { return { e: e, r: info[key(e)], b: fought.byKey[key(e)], i: i }; });
     if (sortCol >= 0 && sortDir) {
       var c = COLUMNS[sortCol];
       var collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
       rows.sort(function (a, b) {
-        var x = c.value(a.e, a.r), y = c.value(b.e, b.r);
+        var x = c.value(a.e, a.r, a.b), y = c.value(b.e, b.r, b.b);
         var xe = x === null || x === "", ye = y === null || y === "";
         if (xe || ye) return xe === ye ? a.i - b.i : (xe ? 1 : -1); // empty last
         var d = c.num ? x - y : collator.compare(String(x), String(y));
@@ -207,8 +244,8 @@
     rows.forEach(function (row) {
       var tr = el("tr");
       COLUMNS.forEach(function (c, i) {
-        var v = c.value(row.e, row.r);
-        var text = c.text ? c.text(row.e, row.r) : (v === null || v === undefined ? "" : String(v));
+        var v = c.value(row.e, row.r, row.b);
+        var text = c.text ? c.text(row.e, row.r, row.b) : (v === null || v === undefined ? "" : String(v));
         var cls = (c.num ? "num" : "") + (c.good && v !== null && c.good(v) ? " meets-a" : "");
         tr.appendChild(el(i === 0 ? "th" : "td", { scope: i === 0 ? "row" : null, class: cls.trim(), text: text }));
       });
@@ -235,8 +272,61 @@
       "A team's Bulk, Safety and Consistency grades are the averages of its three members' values, so a highlighted value is at A level on its own " +
       "(Bulk " + Math.ceil(0.9 * bulkGoal).toLocaleString() + " or more, Safety and Consistency 88.2 or more). " +
       "IV Rank: the IVs' rank by stat product among every IV combination for this species in this league (upstream's IV Rank; ?? = below the species' IV floor). " +
-      "Safety: the species' switches score in this cup's rankings, 60 if it isn't ranked (as upstream's Team Builder does). Click a heading to sort.";
+      "Safety: the species' switches score in this cup's rankings, 60 if it isn't ranked (as upstream's Team Builder does). " +
+      (fought.threats ? "Wins: how many of the " + fought.threats.toLocaleString() + " Pokémon in this cup it beats one-on-one (battle rating above 500, shields 0 and 1 combined). " : "") +
+      "Click a heading to sort.";
   }
+
+  // ---- Battles (step 3) ----
+  var battleJob = null;
+  runBtn.addEventListener("click", function () {
+    if (busy) return;
+    var todo = needBattles();
+    if (!todo.length) return;
+    var forCup = cup;
+    setBusy(true);
+    cancelBtn.hidden = false;
+    cancelBtn.disabled = false;
+    progressEl.hidden = false;
+    progressEl.removeAttribute("value"); // moving bar until the first contender starts
+    battleStatus.classList.remove("error");
+    battleStatus.textContent = "Starting…";
+    battleJob = TF.request({ type: "battles", cup: forCup.cup, cp: forCup.cp, meta: forCup.meta, contenders: todo }, function (text, m) {
+      battleStatus.textContent = text;
+      if (m.total) { progressEl.max = m.total; progressEl.value = m.done; }
+    });
+    battleJob
+      .then(function (r) {
+        var b = battleResults[forCup.key] || (battleResults[forCup.key] = { threats: 0, byKey: {} });
+        b.threats = r.threats;
+        r.contenders.forEach(function (res, i) { if (res.ok && !res.pending) b.byKey[key(todo[i])] = res; });
+        var bad = r.contenders.filter(function (res) { return !res.ok; });
+        var left = r.contenders.filter(function (res) { return res.pending; }).length;
+        battleStatus.textContent = (r.cancelled ? "Cancelled. " : "") +
+          r.ran + " contender" + (r.ran === 1 ? "" : "s") + " × " + r.threats.toLocaleString() + " Pokémon: " +
+          r.battles.toLocaleString() + " battles in " + (r.ms / 1000).toFixed(1) + " s." +
+          (left ? " " + left + " still to do; run again to continue." : "") +
+          (bad.length ? " Couldn't battle: " + bad.map(function (x) { return x.error; }).join("; ") : "");
+        battleStatus.classList.toggle("error", bad.length > 0);
+      })
+      .catch(function (err) {
+        battleStatus.textContent = err.message;
+        battleStatus.classList.add("error");
+      })
+      .then(function () {
+        battleJob = null;
+        cancelBtn.hidden = true;
+        progressEl.hidden = true;
+        setBusy(false);
+        if (forCup === cup) render();
+      });
+  });
+  cancelBtn.addEventListener("click", function () {
+    if (!battleJob) return;
+    TF.cancel(battleJob);
+    cancelBtn.disabled = true;
+    battleStatus.textContent = "Cancelling after this contender…";
+  });
 
   // ---- Changing cup: show that cup's list ----
   function switchCup() {
@@ -421,16 +511,19 @@
   }
   section.querySelector("[data-export]").addEventListener("click", function () {
     if (!entries.length) { setStatus("There are no contenders to export.", true); return; }
-    var head = INPUT_COLUMNS.concat(["speciesName", "moveset", "level", "ivRank", "ivRankOf", "bulk", "safety", "consistency", "cupRank", "problem"]);
+    var head = INPUT_COLUMNS.concat(["speciesName", "moveset", "level", "ivRank", "ivRankOf", "bulk", "safety", "consistency", "cupRank", "wins", "winsOf", "problem"]);
     var lines = [head.join(",")];
+    var fought = cupBattles();
     entries.forEach(function (e) {
       var r = info[key(e)] || {};
       var ok = r.ok;
+      var b = fought.byKey[key(e)];
       lines.push([
         e.speciesId, e.ivs.atk, e.ivs.def, e.ivs.hp, e.cp, e.fastMove, e.chargedMoves[0], e.chargedMoves[1] || "none",
         speciesLabel(e.speciesId),
         ok ? r.moveset : "", ok ? r.level : "", ok ? r.ivRank : "", ok ? r.ivCount : "",
         ok ? r.bulk : "", ok ? r.safety : "", ok ? r.consistency : "", ok ? (r.rank || "") : "",
+        b ? b.wins : "", b ? fought.threats : "",
         r.ok === false ? r.error : ""
       ].map(csvField).join(","));
     });

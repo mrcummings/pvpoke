@@ -6,7 +6,8 @@ permalink: /team-finder/
 {%- comment -%}
   Team Finder (plan in CLAUDE.md). Two parts, sharing one cup choice:
     - Contenders (step 2): the pool of Pokémon the search will build teams from, with each one's
-      own level, IV Rank, Bulk, Safety and Consistency. Script: assets/js/team-finder/pool.js.
+      own level, IV Rank, Bulk, Safety and Consistency; and its battles against every threat
+      (step 3). Script: assets/js/team-finder/pool.js.
     - Grade one team (step 1): grades a team of three the way upstream's Team Builder does.
       Script: assets/js/team-finder/page.js.
   Shared code (game master, cup list, the background worker): assets/js/team-finder/common.js.
@@ -104,6 +105,17 @@ permalink: /team-finder/
     <p class="source" data-pool-note hidden></p>
     <div class="table-wrap pool-table" data-pool-wrap hidden>
       <table class="data" data-pool-table></table>
+    </div>
+
+    <div class="battle-run" data-battle-run hidden>
+      <h3>Battles</h3>
+      <p class="source">Each contender battles every Pokémon eligible in this cup once (0 and 1 shields, as the Team Builder does). The search then grades every team of three from these results. Results last until the page is closed or reloaded; contenders already done are skipped.</p>
+      <div class="actions">
+        <button type="button" class="primary" data-run-battles>Run battles</button>
+        <button type="button" class="secondary" data-cancel-battles hidden>Cancel</button>
+        <progress data-battle-progress hidden></progress>
+        <span class="status" data-battle-status aria-live="polite"></span>
+      </div>
     </div>
   </section>
 

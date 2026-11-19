@@ -159,7 +159,7 @@
     running = true;
     results.hidden = true;
     setStatus("Starting the battle engine…");
-    TF.request({ type: "grade", cup: c.cup, cp: c.cp, meta: c.meta, team: team }, setStatus)
+    TF.request({ type: "grade", cup: c.cup, cp: c.cp, meta: c.meta, team: team }, function (t) { setStatus(t); })
       .then(function (r) { setStatus("Done."); render(r); })
       .catch(function (err) { setStatus(err.message, true); })
       .then(function () { running = false; });

@@ -9,6 +9,8 @@
 //   TF.fillMoves(fieldset, species, wanted)   fills a fieldset's three move lists
 //   TF.request(message, onProgress)   sends a job to worker.js; Promise of its result.
 //                       One worker is shared; it does one job at a time, in order.
+//                       onProgress(text, message): message has done and total when known.
+//   TF.cancel(promise)  asks the worker to stop that job
 //   TF.el(tag, attrs, children)       makes an element
 //
 // The chosen cup is remembered in this browser. Changing it fires "tf:cup" on document.
@@ -177,7 +179,7 @@
         var m = e.data;
         var job = pending[m.id];
         if (!job) return;
-        if (m.type === "progress") { if (job.onProgress) job.onProgress(m.text); return; }
+        if (m.type === "progress") { if (job.onProgress) job.onProgress(m.text, m); return; }
         delete pending[m.id];
         if (m.type === "error") job.reject(new Error(m.message));
         else job.resolve(m);
@@ -187,11 +189,18 @@
       };
     }
     var id = nextId++;
-    return new Promise(function (resolve, reject) {
+    var promise = new Promise(function (resolve, reject) {
       pending[id] = { resolve: resolve, reject: reject, onProgress: onProgress };
       message.id = id;
       worker.postMessage(message);
     });
+    promise.jobId = id;
+    return promise;
+  };
+
+  // Asks the worker to stop a job (a "battles" job stops between contenders).
+  TF.cancel = function (promise) {
+    if (worker && promise && promise.jobId) worker.postMessage({ type: "cancel", target: promise.jobId });
   };
 
   // ---- Start ----
