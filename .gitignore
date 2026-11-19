@@ -9,3 +9,6 @@ _site/
 .sass-cache/
 .bundle/
 vendor/
+
+# The owner's private Team Finder contender lists (CSV exports); also excluded in _config.yml
+contenders/
