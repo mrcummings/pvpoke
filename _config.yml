@@ -31,3 +31,5 @@ exclude:
   - CLAUDE-TEMPLATE.md
   - HUMANS.md
   - STYLE-GUIDE.md
+  # The owner's private contender lists (Team Finder CSV exports). Also in .gitignore.
+  - contenders
