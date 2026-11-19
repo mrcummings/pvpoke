@@ -47,7 +47,7 @@ permalink: /team-finder/
     <p class="source">Each cup keeps its own list, remembered in this browser. Export a CSV to keep a copy.</p>
     <details class="more">
       <summary>About the CSV</summary>
-      <p class="source">A CSV needs the columns <code>speciesId, ivAtk, ivDef, ivHp, cp, fastMove, chargedMove1, chargedMove2</code> (any order, other columns ignored); species and moves can be IDs or names, a blank move gets the recommended one, and <code>none</code> leaves the second charged move empty. Loaded and added contenders go on the end of the list; repeats are skipped. An exported CSV loads back in: its extra columns are ignored.</p>
+      <p class="source">A CSV needs the columns <code>speciesId, ivAtk, ivDef, ivHp, cp, fastMove, chargedMove1, chargedMove2</code> (any order, other columns ignored); species and moves can be IDs or names, a blank move gets the recommended one, and <code>none</code> leaves the second charged move empty. Loaded and added contenders go on the end of the list; repeats are skipped. An exported CSV loads back in: its extra columns are ignored. Upgraded versions (the Upgrade… button) aren't exported.</p>
     </details>
 
     <div class="pool-actions">
@@ -108,6 +108,53 @@ permalink: /team-finder/
         </fieldset>
       </form>
     </details>
+
+    <dialog class="upgrade-dialog" data-upgrade-dialog aria-labelledby="tf-up-title">
+      <form class="team-form" data-upgrade-form>
+        <h3 id="tf-up-title" data-upgrade-title>Upgrade</h3>
+        <p class="source" data-upgrade-now></p>
+        <p class="source">An upgraded version is added under the original as a separate contender, to compare. Your Pokémon as it is now stays in the list. Upgrades are kept in this browser only; Export CSV leaves them out.</p>
+        <label class="check-label"><input type="checkbox" data-upgrade-power> Power up as far as this league allows (up to level 50)</label>
+        <fieldset class="member" data-upgrade-fs>
+          <legend>Change</legend>
+          <div class="field">
+            <label for="tf-up-form">Form</label>
+            <select id="tf-up-form" data-upgrade-species></select>
+          </div>
+          <div class="field-row">
+            <div class="field iv">
+              <label for="tf-up-atk">Atk IV</label>
+              <input id="tf-up-atk" type="number" min="0" max="15" step="1" required data-iv="atk">
+            </div>
+            <div class="field iv">
+              <label for="tf-up-def">Def IV</label>
+              <input id="tf-up-def" type="number" min="0" max="15" step="1" required data-iv="def">
+            </div>
+            <div class="field iv">
+              <label for="tf-up-hp">HP IV</label>
+              <input id="tf-up-hp" type="number" min="0" max="15" step="1" required data-iv="hp">
+            </div>
+          </div>
+          <div class="field">
+            <label for="tf-up-fast">Fast move</label>
+            <select id="tf-up-fast" required data-move="fast"></select>
+          </div>
+          <div class="field">
+            <label for="tf-up-c1">Charged move 1</label>
+            <select id="tf-up-c1" required data-move="charged1"></select>
+          </div>
+          <div class="field">
+            <label for="tf-up-c2">Charged move 2</label>
+            <select id="tf-up-c2" data-move="charged2" data-allow-none></select>
+          </div>
+        </fieldset>
+        <p class="status" data-upgrade-status aria-live="polite"></p>
+        <div class="actions">
+          <button type="submit" class="primary" data-upgrade-add>Add upgraded version</button>
+          <button type="button" class="secondary" data-upgrade-cancel>Cancel</button>
+        </div>
+      </form>
+    </dialog>
 
     <p class="status" data-pool-status aria-live="polite"></p>
     <ul class="problems" data-problems hidden></ul>

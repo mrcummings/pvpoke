@@ -209,6 +209,24 @@ table.data button.remove { font-size: 0.8rem; padding: 0.1em 0.5em; }
 /* A contender's value that's at A level on its own (see the note under the list) */
 table.data td.meets-a { color: var(--ok); font-weight: 600; }
 table.data tr.problem td { color: var(--danger); }
+/* Upgraded versions ("potential"): listed under the original, marked by an accent bar and label */
+table.data tr.upgrade th { padding-left: 1.4rem; box-shadow: inset 4px 0 0 var(--accent); }
+.upgrade-label { color: var(--accent); font-weight: 600; white-space: nowrap; }
+table.data td.row-actions { white-space: nowrap; }
+table.data td.row-actions button + button { margin-left: 0.3rem; }
+table.data td.upgrades .line { display: block; }
+table.data td.upgrades .none { color: var(--muted); }
+.upgrade-dialog {
+  max-width: min(32rem, calc(100vw - 32px)); width: 100%;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-top: 6px solid var(--accent); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 0.75rem 1rem 1rem;
+}
+.upgrade-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.upgrade-dialog h3 { margin: 0 0 0.25rem; }
+.upgrade-dialog .member { margin: 0.5rem 0; }
+.upgrade-dialog .check-label { display: flex; gap: 0.5rem; align-items: baseline; font-weight: 600; margin: 0.5rem 0; }
+.upgrade-dialog .check-label input { width: auto; }
 .battle-run { margin-top: 1.25rem; }
 .battle-run h3 { margin: 0 0 0.25rem; }
 .battle-run progress, .search progress { width: 12rem; accent-color: var(--accent); }

@@ -6,6 +6,7 @@
 // Messages in:   { id, type: "grade", cup, cp, meta, team: [contender, contender, contender] }
 //                { id, type: "evaluate", cup, cp, contenders: [contender, ...] }   (no battles)
 //                { id, type: "battles", cup, cp, meta, contenders: [contender, ...] }
+//                { id, type: "upgrade", cup, cp, base: contender, change: {...} }   (see upgrade())
 //                { type: "cancel", target: id }   (stops a "battles" job between contenders)
 //   contender:   { speciesId, ivs: {atk, def, hp}, cp, fastMove, chargedMoves: [id, id or "none"] }
 //                Without ivs and cp, the species gets upstream's default IVs and level for the league.
@@ -500,7 +501,8 @@ function winCount(res) {
 // Only the best K threats per team are kept in order (a small sorted list), since the counter
 // team almost always comes from the first few; if it doesn't, that team falls back to a full sort.
 // Rules: sameDex = no two members with the same Pokédex number (GBL: no repeated species, and a
-// Shadow counts as its species); oneMega = at most one Mega.
+// Shadow counts as its species); oneMega = at most one Mega. Always, whatever the rules: no two
+// members with the same group (msg.groups[i]; a Pokémon and its upgraded versions share one).
 // Output: the best 500 teams meeting the targets (or, if none do, the 500 closest), plus counts.
 var POINTS = { A: 4, B: 3, C: 2, D: 1, F: 0 };
 var LETTERS = ["F", "D", "C", "B", "A"];
@@ -608,6 +610,7 @@ async function search(msg) {
   // 4. Every team of three
   var N = built.length;
   var include = (msg.include || []).slice().sort(function (x, y) { return x - y; });
+  var groups = Array.isArray(msg.groups) && msg.groups.length === N ? msg.groups : null;
   if (include.length > 3) throw new Error("At most 3 contenders can be marked \"must include\".");
   var rules = msg.rules || {};
   var targets = msg.targets || {};
@@ -626,6 +629,7 @@ async function search(msg) {
           if (cancelled[currentId]) { delete cancelled[currentId]; throw new Error("Cancelled."); }
         }
         if (include.length && include.some(function (x) { return x !== a && x !== b2 && x !== c; })) { ruledOut++; continue; }
+        if (groups && (groups[a] === groups[b2] || groups[a] === groups[c] || groups[b2] === groups[c])) { ruledOut++; continue; }
         if (rules.sameDex && (dex[a] === dex[b2] || dex[a] === dex[c] || dex[b2] === dex[c])) { ruledOut++; continue; }
         if (rules.oneMega && (mega[a] + mega[b2] + mega[c]) > 1) { ruledOut++; continue; }
 
@@ -673,7 +677,70 @@ async function search(msg) {
 
 // ---- Jobs, one at a time in the order they arrive ----
 // { type: "cancel", target: id } isn't queued: it marks that job, which stops at its next pause.
-var jobs = { grade: grade, evaluate: evaluate, battles: battles, search: search };
+// ---- Upgrades ("potential"): a contender as it would be after investing in it ----
+// Input: { cup, cp, base: contender, change } where change has any of: speciesId (another form),
+//   ivs, fastMove, chargedMoves, powerUp (true). It starts from the base's current level (worked
+//   out from its CP, as always). A new form or new IVs keep that level, as in the game; powerUp
+//   raises it to the highest level, up to 50, whose CP fits under the cup's cap.
+// Output: { contender, fromLevel, level, poweredUp } or an error saying why the upgrade doesn't
+//   fit (over the cap at the current level; nothing to power up; no change at all; a move the new
+//   form doesn't have).
+var MAX_UPGRADE_LEVEL = 50;
+async function upgrade(msg) {
+  await gmLoaded;
+  var cap = Number(msg.cp);
+  var battle = new Battle();
+  battle.setCP(cap);
+  battle.setCup(msg.cup);
+
+  var base = msg.base;
+  var fromLevel = buildMember(battle, base, cap).level; // also checks the original is valid
+  var ch = msg.change || {};
+  var speciesId = ch.speciesId || base.speciesId;
+  var ivs = ch.ivs || base.ivs;
+
+  var p = new Pokemon(speciesId, 1, battle);
+  if (!p.speciesId) throw new Error("Unknown species: " + speciesId);
+  p.initialize(cap);
+  function cpAt(level) { return p.calculateCP(p.getCPMByLevel(level), ivs.atk, ivs.def, ivs.hp); }
+
+  if (cpAt(fromLevel) > cap) {
+    throw new Error(p.speciesName + " with IVs " + ivs.atk + "/" + ivs.def + "/" + ivs.hp + " would be CP " + cpAt(fromLevel) +
+      " at its current level (" + fromLevel + "), over this league's " + cap + " cap.");
+  }
+  var level = fromLevel;
+  if (ch.powerUp) {
+    for (var l = fromLevel + 0.5; l <= MAX_UPGRADE_LEVEL; l += 0.5) {
+      if (cpAt(l) <= cap) level = l; else break;
+    }
+  }
+
+  var contender = {
+    speciesId: speciesId,
+    ivs: { atk: ivs.atk, def: ivs.def, hp: ivs.hp },
+    cp: cpAt(level),
+    fastMove: ch.fastMove || base.fastMove,
+    chargedMoves: (ch.chargedMoves || base.chargedMoves).slice()
+  };
+  if (!contender.chargedMoves[1]) contender.chargedMoves[1] = "none";
+
+  function same(a, b) {
+    var ca = [a.chargedMoves[0], a.chargedMoves[1] || "none"].sort().join();
+    var cb = [b.chargedMoves[0], b.chargedMoves[1] || "none"].sort().join();
+    return a.speciesId === b.speciesId && a.cp === b.cp && a.fastMove === b.fastMove && ca === cb &&
+      a.ivs.atk === b.ivs.atk && a.ivs.def === b.ivs.def && a.ivs.hp === b.ivs.hp;
+  }
+  if (same(contender, base)) {
+    throw new Error(ch.powerUp && level === fromLevel
+      ? "It can't be powered up any further in this league (level " + fromLevel + ", CP " + base.cp + "), and nothing else changed."
+      : "That's no change from the original.");
+  }
+
+  var built = buildMember(battle, contender, cap); // checks the moves belong to the (new) form
+  reply({ contender: contender, fromLevel: fromLevel, level: built.level, poweredUp: built.level > fromLevel });
+}
+
+var jobs = { grade: grade, evaluate: evaluate, battles: battles, search: search, upgrade: upgrade };
 var queue = Promise.resolve();
 var cancelled = {};
 

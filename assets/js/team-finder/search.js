@@ -72,7 +72,7 @@
   var GRADES = ["Coverage", "Bulk", "Safety", "Consistency"];
 
   function memberLabel(c) {
-    return c.name + " " + c.ivs.atk + "/" + c.ivs.def + "/" + c.ivs.hp;
+    return c.name + (c.upgrade ? " " + c.upgrade : "") + " " + c.ivs.atk + "/" + c.ivs.def + "/" + c.ivs.hp;
   }
 
   function columns(closest) {
@@ -94,7 +94,13 @@
       { label: "Consistency", num: true, key: function (t) { return t.consistency; },
         cell: function (t) { return gradeCell(t.letters[3], String(t.consistency)); } },
       { label: "Points", num: true, key: function (t) { return t.points; },
-        cell: function (t) { return el("td", { class: "num", text: String(t.points) }); } }
+        cell: function (t) { return el("td", { class: "num", text: String(t.points) }); } },
+      { label: "Upgrades", num: true, key: function (t) { return t.upgrades.length; },
+        cell: function (t) {
+          return el("td", { class: "upgrades" }, t.upgrades.length
+            ? t.upgrades.map(function (u) { return el("span", { class: "line upgrade-label", text: u }); })
+            : [el("span", { class: "none", text: "none" })]);
+        } }
     ]);
     return cols;
   }
@@ -199,6 +205,11 @@
     ruleBoxes.forEach(function (b) { rules[b.getAttribute("data-rule")] = b.checked; });
 
     var names = used.map(memberLabel);
+    // A Pokémon and its upgraded versions share a group: never two of them on one team
+    var groupIds = {}, groups = used.map(function (c) {
+      if (!(c.group in groupIds)) groupIds[c.group] = Object.keys(groupIds).length;
+      return groupIds[c.group];
+    });
     findBtn.disabled = true;
     cancelBtn.hidden = false;
     cancelBtn.disabled = false;
@@ -212,14 +223,18 @@
         var e = c.entry;
         return { speciesId: e.speciesId, ivs: e.ivs, cp: e.cp, fastMove: e.fastMove, chargedMoves: e.chargedMoves };
       }),
-      include: include, rules: rules, targets: targets
+      include: include, rules: rules, targets: targets, groups: groups
     }, function (text, m) {
       setStatus(text);
       if (m.total) { progressEl.max = m.total; progressEl.value = m.done; }
     });
 
     job.then(function (r) {
-      r.teams.forEach(function (t) { t.names = t.members.map(function (m) { return names[m]; }); });
+      r.teams.forEach(function (t) {
+        t.names = t.members.map(function (m) { return names[m]; });
+        t.upgrades = t.members.filter(function (m) { return used[m].upgrade; })
+          .map(function (m) { return used[m].name + " " + used[m].upgrade; });
+      });
       last = { result: r, used: used, cupKey: cup.key, targets: targets, summary: summarize(r, used, cup.label) };
       sortCol = -1; sortDir = 0;
       if (TF.pool && TF.pool.recordBattles) {
