@@ -6,7 +6,9 @@
 // - Target grades and rules are remembered in this browser (localStorage).
 // - Results: the best 500 teams that meet the targets, ordered by grade points (A 4, B 3, C 2,
 //   D 1, F 0, summed over the four grades), then lowest threat score. If no team meets them,
-//   the 500 closest ("short by" = how many grade steps below the targets in total).
+//   the 500 closest ("short by" = how many grade steps below the targets in total). That case is
+//   announced by a highlighted notice above the table, and "Short by" is then the first column
+//   after the team, so the fallback can't be mistaken for teams that meet the targets.
 // - Each team's "Grade" button loads it into "Grade one team" (page.js, TF.gradeTeam), which
 //   shows its top threats and a link to the same team on pvpoke.com.
 // - Results are cleared when the cup changes, and marked out of date when the contenders change.
@@ -25,6 +27,7 @@
   var progressEl = form.querySelector("[data-search-progress]");
   var statusEl = form.querySelector("[data-search-status]");
   var summaryEl = section.querySelector("[data-search-summary]");
+  var closestEl = section.querySelector("[data-search-closest]");
   var wrap = section.querySelector("[data-search-wrap]");
   var table = section.querySelector("[data-search-table]");
   var targetSelects = Array.prototype.slice.call(form.querySelectorAll("[data-target]"));
@@ -32,7 +35,7 @@
   var STORE = "team-finder-search";
 
   var job = null;
-  var last = null;      // { result, used, cupKey, summary }
+  var last = null;      // { result, used, cupKey, targets, summary }
   var sortCol = -1, sortDir = 0;
 
   function setStatus(text, isError) {
@@ -72,7 +75,13 @@
   function columns(closest) {
     var cols = [
       { label: "Team", key: function (t) { return t.names.join(" "); },
-        cell: function (t) { return el("th", { scope: "row", class: "team" }, t.names.map(function (n) { return el("span", { class: "line", text: n }); })); } },
+        cell: function (t) { return el("th", { scope: "row", class: "team" }, t.names.map(function (n) { return el("span", { class: "line", text: n }); })); } }
+    ];
+    if (closest) {
+      cols.push({ label: "Short by", num: true, key: function (t) { return t.short; },
+        cell: function (t) { return el("td", { class: "num short-by", text: String(t.short) }); } });
+    }
+    cols = cols.concat([
       { label: "Coverage", num: true, key: function (t) { return t.threatScore; },
         cell: function (t) { return gradeCell(t.letters[0], "threat score " + t.threatScore); } },
       { label: "Bulk", num: true, key: function (t) { return t.bulk; },
@@ -83,11 +92,7 @@
         cell: function (t) { return gradeCell(t.letters[3], String(t.consistency)); } },
       { label: "Points", num: true, key: function (t) { return t.points; },
         cell: function (t) { return el("td", { class: "num", text: String(t.points) }); } }
-    ];
-    if (closest) {
-      cols.push({ label: "Short by", num: true, key: function (t) { return t.short; },
-        cell: function (t) { return el("td", { class: "num", text: String(t.short) }); } });
-    }
+    ]);
     return cols;
   }
 
@@ -99,8 +104,13 @@
 
   function render() {
     table.innerHTML = "";
-    if (!last) { wrap.hidden = true; summaryEl.hidden = true; return; }
+    if (!last) { wrap.hidden = true; summaryEl.hidden = true; closestEl.hidden = true; return; }
     var r = last.result;
+    closestEl.hidden = !(r.closest && r.teams.length);
+    if (!closestEl.hidden) {
+      closestEl.textContent = "No team reaches your targets (" + describeTargets(last.targets) + "). Showing the " +
+        r.teams.length.toLocaleString() + " closest instead, nearest first: \"Short by\" counts the grade steps below the targets (B where A was wanted is 1, C is 2).";
+    }
     summaryEl.hidden = false;
     summaryEl.textContent = (last.stale ? "These results are out of date: the contenders or their In search settings changed. Find teams again to update. " : "") + last.summary;
     summaryEl.classList.toggle("stale", !!last.stale);
@@ -152,13 +162,18 @@
     table.appendChild(tbody);
   }
 
+  var TARGET_TEXT = { 4: "A", 3: "B or better", 2: "C or better", 1: "D or better" };
+  function describeTargets(targets) {
+    return GRADES.filter(function (g) { return targets[g.toLowerCase()] > 0; })
+      .map(function (g) { return g + " " + TARGET_TEXT[targets[g.toLowerCase()]]; }).join(", ");
+  }
+
   function summarize(r, used, cupLabel) {
     var parts = [];
     parts.push(cupLabel + ": " + r.graded.toLocaleString() + " teams of three graded from " + used.length + " contenders" +
       (r.ruledOut ? " (" + r.ruledOut.toLocaleString() + " more ruled out by the rules or Must include)" : "") +
       " in " + (r.ms / 1000).toFixed(1) + " s" + (r.battled ? ", after battling " + r.battled + " new contender" + (r.battled === 1 ? "" : "s") : "") + ".");
     if (!r.graded) parts.push("No team is allowed by the rules and Must include settings.");
-    else if (r.closest) parts.push("No team meets all the targets. These are the " + r.teams.length + " closest: \"Short by\" counts the grade steps below the targets (B where A was wanted is 1).");
     else parts.push(r.qualifying.toLocaleString() + " meet the targets" + (r.qualifying > r.teams.length ? "; showing the best " + r.teams.length : "") + ".");
     parts.push("Order: most grade points (A 4, B 3, C 2, D 1, F 0, over the four grades), then lowest threat score. Click a heading to sort; \"Grade\" opens the team below with its top threats and a pvpoke.com link.");
     return parts.join(" ");
@@ -203,7 +218,7 @@
 
     job.then(function (r) {
       r.teams.forEach(function (t) { t.names = t.members.map(function (m) { return names[m]; }); });
-      last = { result: r, used: used, cupKey: cup.key, summary: summarize(r, used, cup.label) };
+      last = { result: r, used: used, cupKey: cup.key, targets: targets, summary: summarize(r, used, cup.label) };
       sortCol = -1; sortDir = 0;
       if (TF.pool && TF.pool.recordBattles) {
         TF.pool.recordBattles(cup.key, r.threats, used.map(function (c, i) { return { entry: c.entry, record: r.records[i] }; }));

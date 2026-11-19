@@ -199,6 +199,8 @@ table.data select.role {
 .search-form .check-label input { width: auto; }
 .search-summary { margin: 0.75rem 0; }
 .search-summary.stale { color: var(--danger); }
+.search-closest { margin: 0.75rem 0; border-left: 4px solid var(--warn); font-weight: 600; }
+table.data td.short-by { font-weight: 700; }
 .team-results { max-height: 75vh; }
 table.data th.team { white-space: normal; }
 table.data th.team .line { display: block; font-weight: 600; }
