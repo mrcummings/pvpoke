@@ -313,6 +313,9 @@ async function grade(msg) {
   combined.sort(function (a, b) { return a.score > b.score ? -1 : (b.score > a.score ? 1 : 0); });
 
   // 2. Counter team and threat score (TeamInterface.js, "Potential threats")
+  // The threats are reused from earlier battles, but on pvpoke.com they're new objects for every
+  // rating. calculateSimilarity saves traits on them, which changes later answers, so clear them.
+  threatList.forEach(function (t) { t.pokemon.traits = undefined; });
   var counterTeam = [];
   var threats = [];
   var sum = 0;
@@ -468,19 +471,209 @@ async function battles(msg) {
       if (p.error) return { ok: false, error: p.error };
       var res = ctx.cache.results[contenderKey(p)];
       if (!res) return { ok: true, pending: true };
-      var wins = 0, losses = 0;
-      for (var t = 0; t < res.rating.length; t++) {
-        if (res.rating[t] < 500) wins++;
-        else if (res.rating[t] > 500) losses++;
-      }
-      return { ok: true, wins: wins, losses: losses, ties: res.rating.length - wins - losses, fresh: !!fresh[contenderKey(p)] };
+      var s = winCount(res);
+      s.fresh = !!fresh[contenderKey(p)];
+      return s;
     })
+  });
+}
+
+// A contender's one-on-one record: the threat's rating below 500 is a win for the contender
+function winCount(res) {
+  var wins = 0, losses = 0;
+  for (var t = 0; t < res.rating.length; t++) {
+    if (res.rating[t] < 500) wins++;
+    else if (res.rating[t] > 500) losses++;
+  }
+  return { ok: true, wins: wins, losses: losses, ties: res.rating.length - wins - losses };
+}
+
+// ---- Search: grade every team of three (step 4) ----
+// Input: { cup, cp, meta, contenders: [contender, ...], include: [index, ...], rules: { sameDex,
+//   oneMega }, targets: { coverage, bulk, safety, consistency } (minimum points: A 4 ... F 0) }.
+// Contenders that haven't battled yet battle first. Every team of three is then graded from the
+// battle cache with arithmetic only, exactly as "grade" does it:
+//   - per threat: score = (s1 + s2 + s3) / 3 and rating = floor((r1 + r2 + r3) / 3);
+//   - threats sorted by score (ties in upstream's original order); the first 6 that aren't
+//     excluded or too similar to one already chosen form the counter team;
+//   - threat score = round(sum of their ratings / 6); Coverage = letter for 1200 - threat score.
+// Only the best K threats per team are kept in order (a small sorted list), since the counter
+// team almost always comes from the first few; if it doesn't, that team falls back to a full sort.
+// Rules: sameDex = no two members with the same Pokédex number (GBL: no repeated species, and a
+// Shadow counts as its species); oneMega = at most one Mega.
+// Output: the best 500 teams meeting the targets (or, if none do, the 500 closest), plus counts.
+var POINTS = { A: 4, B: 3, C: 2, D: 1, F: 0 };
+var LETTERS = ["F", "D", "C", "B", "A"];
+
+async function search(msg) {
+  var ctx = await prepare(msg);
+  var cp = ctx.cp, cupName = ctx.cupName;
+  var t0 = Date.now();
+
+  // 1. Build every contender; battle the ones not done yet
+  var built = msg.contenders.map(function (m) {
+    try { return buildMember(ctx.battle, m, cp).pokemon; } catch (err) { return { error: err.message || String(err) }; }
+  });
+  var bad = built.map(function (p, i) { return p.error ? "#" + (i + 1) + ": " + p.error : null; }).filter(Boolean);
+  if (bad.length) throw new Error("Some contenders can't be used: " + bad.join("; "));
+  var todo = built.filter(function (p) { return !ctx.cache.results[contenderKey(p)]; });
+  for (var b = 0; b < todo.length; b++) {
+    progress("Battling: " + todo[b].speciesName + " (" + (b + 1) + " of " + todo.length + ")…", b, todo.length);
+    await new Promise(function (r) { setTimeout(r, 0); });
+    if (cancelled[currentId]) { delete cancelled[currentId]; throw new Error("Cancelled."); }
+    battlesFor(ctx, todo[b]);
+  }
+  var results = built.map(function (p) { return ctx.cache.results[contenderKey(p)]; });
+  var threats = ctx.cache.threats;
+  var T = threats.length;
+
+  // 2. Each contender's own values (as "grade" works them out)
+  var overall = gm.rankings[cupName + "overall" + cp] || [];
+  var bulk = [], safety = [], consistency = [], dex = [], mega = [];
+  built.forEach(function (p) {
+    p.fullReset();
+    bulk.push(p.getEffectiveStat(1) * p.stats.hp);
+    var s = 60;
+    for (var n = 0; n < overall.length; n++) if (overall[n].speciesId == p.speciesId) { s = overall[n].scores[2]; break; }
+    safety.push(s);
+    consistency.push(p.calculateConsistency());
+    dex.push(p.dex);
+    mega.push(p.hasTag("mega"));
+  });
+  var bGoal = bulkGoal(cp, cupName);
+
+  // 3. Threats that never join a counter team, and similarity (worked out when first needed)
+  var skip = new Uint8Array(T);
+  threats.forEach(function (t, i) {
+    if ((t.speciesId.indexOf("_shadow") > -1 && !allowShadows) || t.speciesId.indexOf("_xs") > -1 ||
+        t.pokemon.hasTag("teambuilderexclude")) skip[i] = 1;
+  });
+  // Upstream quirk, reproduced exactly: calculateSimilarity(candidate, traits) saves the
+  // candidate's traits on it, and the Team Builder passes candidate.traits as `traits`. On
+  // pvpoke.com the threats are new objects for every rating, so a candidate is compared with
+  // the counter team's first member using that member's traits ("first"), and with every later
+  // member using its own traits ("later"). Both answers are kept per pair.
+  var simFirst = new Uint8Array(T * T), simLater = new Uint8Array(T * T); // 0 not known, 1 similar, 2 not
+  function similar(c, t, first) {
+    var k = c * T + t;
+    var tab = first ? simFirst : simLater;
+    if (!tab[k]) {
+      var tp = threats[t].pokemon;
+      var s = threats[c].pokemon.calculateSimilarity(tp, first ? undefined : tp.generateTraits(), false);
+      tab[k] = (s == -1 || s >= 1000) ? 1 : 2;
+    }
+    return tab[k] === 1;
+  }
+
+  // Threat score for one team (members a, b, c)
+  var K = 32;
+  var topIdx = new Int32Array(K), topScore = new Float64Array(K);
+  var chosen = [];
+  function pickFrom(order, n, ra, rb, rc) {
+    chosen.length = 0;
+    var sum = 0;
+    for (var q = 0; q < n && chosen.length < 6; q++) {
+      var t = order[q];
+      if (skip[t]) continue;
+      var close = false;
+      for (var z = 0; z < chosen.length; z++) if (similar(chosen[z], t, z === 0)) { close = true; break; }
+      if (!close) { chosen.push(t); sum += Math.floor((ra[t] + rb[t] + rc[t]) / 3); }
+    }
+    return sum;
+  }
+  function threatScore(a, b, c) {
+    var sa = results[a].score, sb = results[b].score, sc = results[c].score;
+    var ra = results[a].rating, rb = results[b].rating, rc = results[c].rating;
+    var count = 0;
+    for (var t = 0; t < T; t++) {
+      var s = (sa[t] + sb[t] + sc[t]) / 3;
+      if (count === K && s <= topScore[K - 1]) continue; // ties keep the earlier threat
+      var pos = count < K ? count : K - 1;
+      while (pos > 0 && topScore[pos - 1] < s) { topScore[pos] = topScore[pos - 1]; topIdx[pos] = topIdx[pos - 1]; pos--; }
+      topScore[pos] = s; topIdx[pos] = t;
+      if (count < K) count++;
+    }
+    var sum = pickFrom(topIdx, count, ra, rb, rc);
+    if (chosen.length < 6 && count === K) {
+      // Rare: not enough distinct threats among the best K; sort them all
+      var all = [];
+      for (var u = 0; u < T; u++) all.push(u);
+      var full = all.map(function (u) { return (sa[u] + sb[u] + sc[u]) / 3; });
+      all.sort(function (x, y) { return full[y] - full[x] || x - y; });
+      sum = pickFrom(all, T, ra, rb, rc);
+    }
+    return Math.round(sum / 6);
+  }
+
+  // 4. Every team of three
+  var N = built.length;
+  var include = (msg.include || []).slice().sort(function (x, y) { return x - y; });
+  if (include.length > 3) throw new Error("At most 3 contenders can be marked \"must include\".");
+  var rules = msg.rules || {};
+  var targets = msg.targets || {};
+  var need = [targets.coverage || 0, targets.bulk || 0, targets.safety || 0, targets.consistency || 0];
+
+  var possible = N * (N - 1) * (N - 2) / 6;
+  var teams = [];   // every team allowed by the rules: [a, b, c, threat, bulk, safety, cons, points x4]
+  var checked = 0, ruledOut = 0, qualifying = 0;
+  for (var a = 0; a < N; a++) {
+    for (var b2 = a + 1; b2 < N; b2++) {
+      for (var c = b2 + 1; c < N; c++) {
+        checked++;
+        if (checked % 2000 === 0) {
+          progress("Grading teams: " + checked.toLocaleString() + " of " + possible.toLocaleString() + "…", checked, possible);
+          await new Promise(function (r) { setTimeout(r, 0); });
+          if (cancelled[currentId]) { delete cancelled[currentId]; throw new Error("Cancelled."); }
+        }
+        if (include.length && include.some(function (x) { return x !== a && x !== b2 && x !== c; })) { ruledOut++; continue; }
+        if (rules.sameDex && (dex[a] === dex[b2] || dex[a] === dex[c] || dex[b2] === dex[c])) { ruledOut++; continue; }
+        if (rules.oneMega && (mega[a] + mega[b2] + mega[c]) > 1) { ruledOut++; continue; }
+
+        var ts = threatScore(a, b2, c);
+        var avgBulk = (bulk[a] + bulk[b2] + bulk[c]) / 3;
+        var avgSafety = (safety[a] + safety[b2] + safety[c]) / 3;
+        var avgCons = (consistency[a] + consistency[b2] + consistency[c]) / 3;
+        var pts = [
+          POINTS[letterGrade(1200 - ts, 680)],
+          POINTS[letterGrade(avgBulk, bGoal)],
+          POINTS[letterGrade(avgSafety, 98)],
+          POINTS[letterGrade(avgCons, 98)]
+        ];
+        var short = 0;
+        for (var g = 0; g < 4; g++) short += Math.max(0, need[g] - pts[g]);
+        if (short === 0) qualifying++;
+        teams.push({ m: [a, b2, c], ts: ts, bulk: avgBulk, safety: avgSafety, consistency: avgCons, pts: pts, short: short,
+          total: pts[0] + pts[1] + pts[2] + pts[3] });
+      }
+    }
+  }
+
+  // 5. The best 500 that meet the targets; if none do, the 500 closest
+  var pool = qualifying ? teams.filter(function (t) { return t.short === 0; }) : teams;
+  pool.sort(function (x, y) {
+    return (x.short - y.short) || (y.total - x.total) || (x.ts - y.ts) || (y.bulk - x.bulk);
+  });
+  var shown = pool.slice(0, 500).map(function (t) {
+    return {
+      members: t.m,
+      threatScore: t.ts,
+      bulk: Math.round(t.bulk), safety: Math.round(t.safety * 10) / 10, consistency: Math.round(t.consistency * 10) / 10,
+      letters: t.pts.map(function (p) { return LETTERS[p]; }),
+      points: t.total, short: t.short
+    };
+  });
+
+  reply({
+    possible: possible, ruledOut: ruledOut, graded: teams.length, qualifying: qualifying,
+    closest: qualifying === 0, teams: shown, battled: todo.length, threats: T, bulkGoal: bGoal,
+    records: results.map(winCount), // each contender's wins, for the pool's Wins column
+    ms: Date.now() - t0
   });
 }
 
 // ---- Jobs, one at a time in the order they arrive ----
 // { type: "cancel", target: id } isn't queued: it marks that job, which stops at its next pause.
-var jobs = { grade: grade, evaluate: evaluate, battles: battles };
+var jobs = { grade: grade, evaluate: evaluate, battles: battles, search: search };
 var queue = Promise.resolve();
 var cancelled = {};
 

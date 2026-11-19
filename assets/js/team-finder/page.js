@@ -4,6 +4,7 @@
 // - A species' moves default to its recommended moveset in the chosen cup's rankings.
 // - "Grade team" sends the team to worker.js, which runs upstream's engine in the background.
 // - The form is remembered in this browser (localStorage) so it's still filled in next time.
+// - TF.gradeTeam(entries) fills the form with a team from "Find teams" and grades it.
 
 (function () {
   "use strict";
@@ -164,6 +165,25 @@
       .catch(function (err) { setStatus(err.message, true); })
       .then(function () { running = false; });
   });
+
+  // For search.js: fill the form with a team (three contender entries), grade it, scroll to it.
+  TF.gradeTeam = function (team) {
+    team.forEach(function (e, i) {
+      var fs = members[i];
+      var species = TF.speciesById[e.speciesId];
+      if (!fs || !species) return;
+      fs.querySelector("[data-species]").value = species.speciesName;
+      fs.querySelector("[data-cp]").value = e.cp;
+      fs.querySelector('[data-iv="atk"]').value = e.ivs.atk;
+      fs.querySelector('[data-iv="def"]').value = e.ivs.def;
+      fs.querySelector('[data-iv="hp"]').value = e.ivs.hp;
+      fs.removeAttribute("data-species-id"); // so the moves are filled even for the same species
+      speciesChosen(fs, [e.fastMove, e.chargedMoves[0], e.chargedMoves[1] || "none"]);
+    });
+    save();
+    form.closest("section").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (form.reportValidity()) form.requestSubmit();
+  };
 
   form.addEventListener("change", save);
   members.forEach(function (fs) {

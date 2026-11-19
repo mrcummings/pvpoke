@@ -13,6 +13,8 @@
 // - Run battles (step 3): every contender against every Pokémon in the cup, in the worker,
 //   with progress and Cancel. The worker keeps the results for the search; this page shows
 //   each contender's Wins. Results last until the page is closed or reloaded.
+// - "In search" (Use, Must include, Leave out) is stored with each contender as entry.role
+//   (absent = Use). search.js reads the list through TF.pool and hears "tf:pool" on changes.
 //
 // CSV columns, any order, not case-sensitive, other columns ignored:
 //   speciesId, ivAtk, ivDef, ivHp, cp, fastMove, chargedMove1, chargedMove2
@@ -92,7 +94,28 @@
   }
   function save() {
     try { localStorage.setItem(STORE + cup.key, JSON.stringify(entries)); } catch (e) { /* storage blocked */ }
+    changed();
   }
+  // Tells search.js the list (or a contender's "In search" setting) changed
+  function changed() { document.dispatchEvent(new CustomEvent("tf:pool")); }
+
+  // For search.js: this cup's contenders that check out, with their "In search" setting
+  // (role: "use", "include" or "out").
+  TF.pool = {
+    contenders: function () {
+      return entries.filter(function (e) { var r = info[key(e)]; return r && r.ok; }).map(function (e) {
+        var r = info[key(e)];
+        return { entry: e, role: e.role || "use", name: r.speciesName, ivs: e.ivs, cp: e.cp, moveset: r.moveset };
+      });
+    },
+    // After a search battled contenders itself: record their wins. list: [{ entry, record }]
+    recordBattles: function (cupKey, threats, list) {
+      var b = battleResults[cupKey] || (battleResults[cupKey] = { threats: 0, byKey: {} });
+      b.threats = threats;
+      list.forEach(function (x) { b.byKey[key(x.entry)] = x.record; });
+      if (cup && cup.key === cupKey) render();
+    }
+  };
 
   // ---- Checking contenders in the worker ----
   // Sends the contenders (and any not yet checked in this cup) to the worker. Resolves to
@@ -224,6 +247,7 @@
       th.appendChild(btn);
       headRow.appendChild(th);
     });
+    headRow.appendChild(el("th", { scope: "col", text: "In search" }));
     headRow.appendChild(el("th", { scope: "col", text: "" }));
     table.appendChild(el("thead", null, [headRow]));
 
@@ -255,6 +279,17 @@
       } else if (!row.r) {
         tr.children[1].textContent = "Checking…";
       }
+      var role = el("select", { class: "role", "aria-label": "In search: " + describe(row.e) }, [
+        el("option", { value: "use", text: "Use" }),
+        el("option", { value: "include", text: "Must include" }),
+        el("option", { value: "out", text: "Leave out" })
+      ]);
+      role.value = row.e.role || "use";
+      role.addEventListener("change", function () {
+        if (role.value === "use") delete row.e.role; else row.e.role = role.value;
+        save();
+      });
+      tr.appendChild(el("td", null, [role]));
       var remove = el("button", { type: "button", class: "remove", text: "Remove", "aria-label": "Remove " + describe(row.e) });
       remove.addEventListener("click", function () {
         if (busy) return;
@@ -336,6 +371,7 @@
     load();
     showProblems([]);
     render();
+    changed();
     if (!entries.length) { setStatus("No contenders for " + cup.label + " yet."); return; }
     run(evaluate([]).then(function () {
       render();
