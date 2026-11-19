@@ -2,9 +2,12 @@
 // battle engine (published at /src/js/ by _plugins/upstream_files.rb) without upstream's page,
 // so the Team Finder page stays usable while battles run.
 //
-// Messages in:   { type: "grade", cup, cp, meta, team: [{ speciesId, ivs: {atk, def, hp}, cp,
-//                  fastMove, chargedMoves: [id, id] }] }
-// Messages out:  { type: "progress", text }   { type: "result", ... }   { type: "error", message }
+// Every message carries the job's id (common.js matches answers to jobs). Jobs run one at a time.
+// Messages in:   { id, type: "grade", cup, cp, meta, team: [contender, contender, contender] }
+//                { id, type: "evaluate", cup, cp, contenders: [contender, ...] }   (no battles)
+//   contender:   { speciesId, ivs: {atk, def, hp}, cp, fastMove, chargedMoves: [id, id or "none"] }
+//                Without ivs and cp, the species gets upstream's default IVs and level for the league.
+// Messages out:  { id, type: "progress", text }   { id, type: "result", ... }   { id, type: "error", message }
 //
 // How a team is graded (matching upstream's Team Builder, src/js/interface/TeamInterface.js,
 // updateTeamResults, with its default options):
@@ -50,7 +53,11 @@ $.ajax = function (o) {
     if (!r.ok) throw new Error(r.status + " " + o.url);
     return r.json();
   }).then(function (data) { o.success(data); })
-    .catch(function (e) { if (o.error) o.error(e, String(e)); fail("Couldn't load " + o.url + ": " + e.message); });
+    .catch(function (e) {
+      if (o.error) o.error(e, String(e));
+      // End the current job: otherwise it would wait forever for this file
+      if (currentReject) currentReject(new Error("Couldn't load " + o.url + ": " + e.message));
+    });
 };
 $.getJSON = function (url, cb) {
   $.ajax({ url: url, success: cb });
@@ -88,8 +95,11 @@ importScripts(
 
 var gm = GameMaster.getInstance();
 
-function fail(message) { self.postMessage({ type: "error", message: message }); }
-function progress(text) { self.postMessage({ type: "progress", text: text }); }
+var currentId = 0;        // the job being worked on
+var currentReject = null; // ends it with an error
+function fail(message) { self.postMessage({ id: currentId, type: "error", message: message }); }
+function progress(text) { self.postMessage({ id: currentId, type: "progress", text: text }); }
+function reply(result) { result.id = currentId; result.type = "result"; self.postMessage(result); }
 
 function loadRankings(cup, cp) {
   return new Promise(function (resolve) {
@@ -132,29 +142,53 @@ function levelsForCP(pokemon, ivs, cp) {
 
 // Builds one team member the way upstream does when it opens a share link
 // (PokeMultiSelect.quickFillURLParam): initialize, set IVs, set level, select moves.
+// Without ivs and cp: upstream's default IVs and level for the league (as initialize sets them).
 function buildMember(battle, m, leagueCP) {
   var p = new Pokemon(m.speciesId, 1, battle);
   if (!p.speciesId) throw new Error("Unknown species: " + m.speciesId);
   p.initialize(leagueCP);
 
-  var label = p.speciesName + " (CP " + m.cp + ", IVs " + m.ivs.atk + "/" + m.ivs.def + "/" + m.ivs.hp + ")";
-  if (m.cp > leagueCP) throw new Error(label + ": CP is above this league's " + leagueCP + " cap.");
-  var levels = levelsForCP(p, m.ivs, m.cp);
-  if (levels.length === 0) {
-    throw new Error(label + ": no level from 1 to 51 gives exactly this CP with these IVs. Check the CP and IVs.");
-  }
-  var level = levels[levels.length - 1]; // several only happens at very low CP; take the highest
+  var level, levels;
+  var useDefaults = !m.ivs || m.cp === undefined || m.cp === null;
+  var label = useDefaults ? p.speciesName :
+    p.speciesName + " (CP " + m.cp + ", IVs " + m.ivs.atk + "/" + m.ivs.def + "/" + m.ivs.hp + ")";
 
-  p.setIV("atk", m.ivs.atk);
-  p.setIV("def", m.ivs.def);
-  p.setIV("hp", m.ivs.hp);
-  p.setLevel(level);
+  if (useDefaults) {
+    level = p.level;
+    levels = [level];
+  } else {
+    if (m.cp > leagueCP) throw new Error(label + ": CP is above this league's " + leagueCP + " cap.");
+    levels = levelsForCP(p, m.ivs, m.cp);
+    if (levels.length === 0) {
+      throw new Error(label + ": no level from 1 to 51 gives exactly this CP with these IVs. Check the CP and IVs.");
+    }
+    level = levels[levels.length - 1]; // several only happens at very low CP; take the highest
+
+    p.setIV("atk", m.ivs.atk);
+    p.setIV("def", m.ivs.def);
+    p.setIV("hp", m.ivs.hp);
+    p.setLevel(level);
+  }
+
+  // Moves must be the species' own: upstream would otherwise quietly add an unknown move,
+  // and quietly swap a charged move chosen twice.
+  function check(pool, id, what) {
+    if (!pool.some(function (mv) { return mv.moveId === id; })) {
+      throw new Error(label + ": " + id + " isn't one of its " + what + " moves.");
+    }
+  }
+  var c2 = m.chargedMoves[1] || "none";
+  check(p.fastMovePool, m.fastMove, "fast");
+  check(p.chargedMovePool, m.chargedMoves[0], "charged");
+  if (c2 !== "none") check(p.chargedMovePool, c2, "charged");
+  if (c2 === m.chargedMoves[0]) throw new Error(label + ": both charged moves are " + c2 + ".");
 
   p.selectMove("fast", m.fastMove, 0);
   p.selectMove("charged", m.chargedMoves[0], 0);
-  p.selectMove("charged", m.chargedMoves[1], 1);
+  p.selectMove("charged", c2, 1);
 
-  if (p.cp !== m.cp) throw new Error(label + ": calculated CP " + p.cp + " at level " + level + " doesn't match.");
+  if (!useDefaults && p.cp !== m.cp) throw new Error(label + ": calculated CP " + p.cp + " at level " + level + " doesn't match.");
+  if (p.cp > leagueCP) throw new Error(label + ": CP " + p.cp + " is above this league's " + leagueCP + " cap.");
   return { pokemon: p, level: level, otherLevels: levels.slice(0, -1) };
 }
 
@@ -271,8 +305,7 @@ async function grade(msg) {
   var link = "https://pvpoke.com/team-builder/" + cupName + "/" + battle.getCP(true) + "/" +
     encodeURIComponent(team.map(function (p) { return p.generateURLPokeStr("team-builder"); }).join(","));
 
-  self.postMessage({
-    type: "result",
+  reply({
     members: built.map(function (b, i) {
       var p = b.pokemon;
       return {
@@ -288,8 +321,71 @@ async function grade(msg) {
   });
 }
 
-self.onmessage = function (e) {
-  if (e.data && e.data.type === "grade") {
-    grade(e.data).catch(function (err) { fail(err.message || String(err)); });
+// ---- Contenders: each one's own values, no battles ----
+// For each contender: its CP, level, IVs, IV Rank (upstream's getIVRank("overall"): rank by
+// stat product among every IV combination at its best level under the cap), Bulk (Defense x HP),
+// Safety (its species' switches score in this cup, 60 if unranked), Consistency, and its
+// position in this cup's overall rankings. A contender that can't be built gets { ok: false, error }.
+async function evaluate(msg) {
+  await gmLoaded;
+  var cp = Number(msg.cp);
+  var cupName = msg.cup;
+
+  progress("Loading rankings…");
+  await loadRankings(cupName, cp);
+  var overall = gm.rankings[cupName + "overall" + cp] || [];
+  var position = {};
+  overall.forEach(function (r, i) { if (!(r.speciesId in position)) position[r.speciesId] = i; });
+
+  var battle = new Battle();
+  battle.setCP(cp);
+  battle.setCup(cupName);
+
+  var t0 = Date.now();
+  var out = [];
+  for (var i = 0; i < msg.contenders.length; i++) {
+    if (i % 10 === 0) progress("Working out contender " + (i + 1) + " of " + msg.contenders.length + "…");
+    try {
+      var b = buildMember(battle, msg.contenders[i], cp);
+      var p = b.pokemon;
+      var ivRank = p.getIVRank("overall");
+      p.fullReset();
+      var pos = position[p.speciesId];
+      out.push({
+        ok: true,
+        speciesId: p.speciesId, speciesName: p.speciesName,
+        cp: p.cp, level: b.level, otherLevels: b.otherLevels,
+        ivs: { atk: p.ivs.atk, def: p.ivs.def, hp: p.ivs.hp },
+        fastMove: p.fastMove.moveId,
+        chargedMoves: p.chargedMoves.filter(Boolean).map(function (mv) { return mv.moveId; }),
+        moveset: p.generateMovesetStr(),
+        ivRank: ivRank.rank, ivCount: ivRank.count,
+        bulk: Math.round(p.getEffectiveStat(1) * p.stats.hp),
+        safety: pos === undefined ? 60 : overall[pos].scores[2],
+        consistency: p.calculateConsistency(),
+        rank: pos === undefined ? null : pos + 1
+      });
+    } catch (err) {
+      out.push({ ok: false, error: err.message || String(err) });
+    }
   }
+
+  reply({ contenders: out, bulkGoal: bulkGoal(cp, cupName), ms: Date.now() - t0 });
+}
+
+// ---- Jobs, one at a time in the order they arrive ----
+var jobs = { grade: grade, evaluate: evaluate };
+var queue = Promise.resolve();
+
+self.onmessage = function (e) {
+  var msg = e.data || {};
+  queue = queue.then(function () {
+    return new Promise(function (resolve, reject) {
+      currentId = msg.id;
+      currentReject = reject;
+      if (!jobs[msg.type]) throw new Error("Unknown job: " + msg.type);
+      jobs[msg.type](msg).then(resolve, reject);
+    }).catch(function (err) { fail(err.message || String(err)); })
+      .then(function () { currentReject = null; });
+  });
 };

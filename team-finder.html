@@ -4,79 +4,165 @@ title: Team Finder
 permalink: /team-finder/
 ---
 {%- comment -%}
-  Team Finder, step 1 of the plan in CLAUDE.md: grade one team of three, the way upstream's
-  Team Builder does, so the grades can be checked against pvpoke.com before the search is built.
-  The page script is assets/js/team-finder/page.js; the battles run in
-  assets/js/team-finder/worker.js. The cup list is upstream Team Builder's, limited to the
-  cups that have rankings in src/data/rankings (site.data.rankings, from rankings_pages.rb).
+  Team Finder (plan in CLAUDE.md). Two parts, sharing one cup choice:
+    - Contenders (step 2): the pool of Pokémon the search will build teams from, with each one's
+      own level, IV Rank, Bulk, Safety and Consistency. Script: assets/js/team-finder/pool.js.
+    - Grade one team (step 1): grades a team of three the way upstream's Team Builder does.
+      Script: assets/js/team-finder/page.js.
+  Shared code (game master, cup list, the background worker): assets/js/team-finder/common.js.
+  The engine runs in assets/js/team-finder/worker.js. The cup list is upstream Team Builder's,
+  limited to the cups that have rankings in src/data/rankings (site.data.rankings, from
+  rankings_pages.rb).
 {%- endcomment -%}
 {%- assign rk = site.data.rankings -%}
 <div class="page-intro">
   <h1>Team Finder</h1>
-  <p>Grade a team of three the way pvpoke.com's Team Builder does, using upstream's own battle engine and its default options (shields averaged over 0 and 1, shield baiting on, meta threats prioritized, shadows included). Each Pokémon's level is worked out from its species, IVs and CP.</p>
-  <p class="source">Step 1 of the Team Finder: checking that these grades match pvpoke.com. Searching many teams comes next.</p>
+  <p>Build a pool of contenders, then (coming next) search every team of three from it for the grades you want. Grades follow pvpoke.com's Team Builder, using upstream's own battle engine and its default options (shields averaged over 0 and 1, shield baiting on, meta threats prioritized, shadows included). Each Pokémon's level is worked out from its species, IVs and CP.</p>
 </div>
 
 <noscript><p class="notice">The Team Finder needs JavaScript.</p></noscript>
 
-<form class="team-form" data-team-form
-      data-available="{{ rk.top | concat: rk.rest | jsonify | xml_escape }}"
-      data-version="{{ site.time | date: '%s' }}">
-  <div class="field">
-    <label for="tf-cup">Cup</label>
-    <select id="tf-cup" name="cup" required></select>
+<div data-team-finder
+     data-available="{{ rk.top | concat: rk.rest | jsonify | xml_escape }}"
+     data-version="{{ site.time | date: '%s' }}">
+
+  <div class="team-form cup-picker">
+    <div class="field">
+      <label for="tf-cup">Cup</label>
+      <select id="tf-cup" name="cup"></select>
+    </div>
+    <span class="status" data-status aria-live="polite"></span>
   </div>
 
   <datalist id="tf-species"></datalist>
 
-  <div class="members">
-    {%- for n in (1..3) %}
-    <fieldset class="member" data-member="{{ forloop.index0 }}">
-      <legend>Pokémon {{ n }}</legend>
-      <div class="field species">
-        <label for="tf-species-{{ n }}">Species</label>
-        <input id="tf-species-{{ n }}" type="text" list="tf-species" autocomplete="off" required placeholder="Start typing a name" data-species>
-      </div>
-      <div class="field-row">
-        <div class="field cp">
-          <label for="tf-cp-{{ n }}">CP</label>
-          <input id="tf-cp-{{ n }}" type="number" min="10" max="10000" step="1" required data-cp>
-        </div>
-        <div class="field iv">
-          <label for="tf-atk-{{ n }}">Atk IV</label>
-          <input id="tf-atk-{{ n }}" type="number" min="0" max="15" step="1" required data-iv="atk">
-        </div>
-        <div class="field iv">
-          <label for="tf-def-{{ n }}">Def IV</label>
-          <input id="tf-def-{{ n }}" type="number" min="0" max="15" step="1" required data-iv="def">
-        </div>
-        <div class="field iv">
-          <label for="tf-hp-{{ n }}">HP IV</label>
-          <input id="tf-hp-{{ n }}" type="number" min="0" max="15" step="1" required data-iv="hp">
-        </div>
-      </div>
-      <div class="field">
-        <label for="tf-fast-{{ n }}">Fast move</label>
-        <select id="tf-fast-{{ n }}" required data-move="fast"></select>
-      </div>
-      <div class="field">
-        <label for="tf-c1-{{ n }}">Charged move 1</label>
-        <select id="tf-c1-{{ n }}" required data-move="charged1"></select>
-      </div>
-      <div class="field">
-        <label for="tf-c2-{{ n }}">Charged move 2</label>
-        <select id="tf-c2-{{ n }}" required data-move="charged2"></select>
-      </div>
-    </fieldset>
-    {%- endfor %}
-  </div>
+  <section class="pool" data-pool aria-labelledby="pool-heading">
+    <h2 id="pool-heading">Contenders</h2>
+    <p class="source">Each cup keeps its own list, remembered in this browser. Export a CSV to keep a copy. A CSV needs the columns <code>speciesId, ivAtk, ivDef, ivHp, cp, fastMove, chargedMove1, chargedMove2</code> (any order, other columns ignored); species and moves can be IDs or names, a blank move gets the recommended one, and <code>none</code> leaves the second charged move empty. Loaded and added contenders go on the end of the list; repeats are skipped.</p>
 
-  <div class="actions">
-    <button type="submit" class="primary" data-grade disabled>Grade team</button>
-    <span class="status" data-status aria-live="polite"></span>
-  </div>
-</form>
+    <div class="pool-actions">
+      <button type="button" class="secondary" data-load-csv>Load CSV…</button>
+      <input type="file" accept=".csv,text/csv" data-csv-file hidden>
+      <button type="button" class="secondary" data-export>Export CSV</button>
+      <span class="add-top">
+        <label for="tf-top-n">Add the top</label>
+        <input id="tf-top-n" type="number" min="1" max="500" step="1" value="20" data-top-n>
+        <span>from this cup's rankings</span>
+        <button type="button" class="secondary" data-add-top>Add</button>
+      </span>
+      <button type="button" class="secondary danger" data-clear>Remove all</button>
+    </div>
 
-<section class="results" data-results hidden aria-live="polite"></section>
+    <details class="add-contender" data-add-details>
+      <summary>Type in a contender</summary>
+      <form class="team-form" data-add-form>
+        <fieldset class="member">
+          <legend>New contender</legend>
+          <div class="field species">
+            <label for="tf-add-species">Species</label>
+            <input id="tf-add-species" type="text" list="tf-species" autocomplete="off" required placeholder="Start typing a name" data-species>
+          </div>
+          <div class="field-row">
+            <div class="field cp">
+              <label for="tf-add-cp">CP</label>
+              <input id="tf-add-cp" type="number" min="10" max="10000" step="1" required data-cp>
+            </div>
+            <div class="field iv">
+              <label for="tf-add-atk">Atk IV</label>
+              <input id="tf-add-atk" type="number" min="0" max="15" step="1" required data-iv="atk">
+            </div>
+            <div class="field iv">
+              <label for="tf-add-def">Def IV</label>
+              <input id="tf-add-def" type="number" min="0" max="15" step="1" required data-iv="def">
+            </div>
+            <div class="field iv">
+              <label for="tf-add-hp">HP IV</label>
+              <input id="tf-add-hp" type="number" min="0" max="15" step="1" required data-iv="hp">
+            </div>
+          </div>
+          <div class="field">
+            <label for="tf-add-fast">Fast move</label>
+            <select id="tf-add-fast" required data-move="fast"></select>
+          </div>
+          <div class="field">
+            <label for="tf-add-c1">Charged move 1</label>
+            <select id="tf-add-c1" required data-move="charged1"></select>
+          </div>
+          <div class="field">
+            <label for="tf-add-c2">Charged move 2</label>
+            <select id="tf-add-c2" data-move="charged2" data-allow-none></select>
+          </div>
+          <div class="actions">
+            <button type="submit" class="primary" data-add disabled>Add contender</button>
+          </div>
+        </fieldset>
+      </form>
+    </details>
 
+    <p class="status" data-pool-status aria-live="polite"></p>
+    <ul class="problems" data-problems hidden></ul>
+    <p class="source" data-pool-note hidden></p>
+    <div class="table-wrap pool-table" data-pool-wrap hidden>
+      <table class="data" data-pool-table></table>
+    </div>
+  </section>
+
+  <section class="grade-one" aria-labelledby="grade-heading">
+    <h2 id="grade-heading">Grade one team</h2>
+    <p class="source">Grades one team of three, to check against pvpoke.com: the link with the results opens the same team there.</p>
+    <form class="team-form" data-team-form>
+      <div class="members">
+        {%- for n in (1..3) %}
+        <fieldset class="member" data-member="{{ forloop.index0 }}">
+          <legend>Pokémon {{ n }}</legend>
+          <div class="field species">
+            <label for="tf-species-{{ n }}">Species</label>
+            <input id="tf-species-{{ n }}" type="text" list="tf-species" autocomplete="off" required placeholder="Start typing a name" data-species>
+          </div>
+          <div class="field-row">
+            <div class="field cp">
+              <label for="tf-cp-{{ n }}">CP</label>
+              <input id="tf-cp-{{ n }}" type="number" min="10" max="10000" step="1" required data-cp>
+            </div>
+            <div class="field iv">
+              <label for="tf-atk-{{ n }}">Atk IV</label>
+              <input id="tf-atk-{{ n }}" type="number" min="0" max="15" step="1" required data-iv="atk">
+            </div>
+            <div class="field iv">
+              <label for="tf-def-{{ n }}">Def IV</label>
+              <input id="tf-def-{{ n }}" type="number" min="0" max="15" step="1" required data-iv="def">
+            </div>
+            <div class="field iv">
+              <label for="tf-hp-{{ n }}">HP IV</label>
+              <input id="tf-hp-{{ n }}" type="number" min="0" max="15" step="1" required data-iv="hp">
+            </div>
+          </div>
+          <div class="field">
+            <label for="tf-fast-{{ n }}">Fast move</label>
+            <select id="tf-fast-{{ n }}" required data-move="fast"></select>
+          </div>
+          <div class="field">
+            <label for="tf-c1-{{ n }}">Charged move 1</label>
+            <select id="tf-c1-{{ n }}" required data-move="charged1"></select>
+          </div>
+          <div class="field">
+            <label for="tf-c2-{{ n }}">Charged move 2</label>
+            <select id="tf-c2-{{ n }}" required data-move="charged2"></select>
+          </div>
+        </fieldset>
+        {%- endfor %}
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="primary" data-grade disabled>Grade team</button>
+        <span class="status" data-grade-status aria-live="polite"></span>
+      </div>
+    </form>
+
+    <section class="results" data-results hidden aria-live="polite"></section>
+  </section>
+</div>
+
+<script src="{{ '/assets/js/team-finder/common.js' | relative_url }}" defer></script>
+<script src="{{ '/assets/js/team-finder/pool.js' | relative_url }}" defer></script>
 <script src="{{ '/assets/js/team-finder/page.js' | relative_url }}" defer></script>

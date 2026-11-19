@@ -144,6 +144,42 @@ button.primary:disabled { opacity: 0.55; cursor: progress; }
 .grade-card[data-grade="D"], .grade-card[data-grade="F"] { border-top-color: var(--danger); }
 .check { margin-top: 1rem; }
 
+/* Team Finder: the shared cup choice, the contenders, and the "Grade one team" section */
+.cup-picker { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 1rem; }
+.cup-picker .field { min-width: 16rem; margin-bottom: 0; }
+.pool, .grade-one { max-width: 72rem; margin-top: 2rem; }
+.pool h2, .grade-one h2 { margin: 0 0 0.25rem; }
+.results h3 { margin: 1.25rem 0 0.5rem; }
+.pool-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0.75rem 0; }
+.add-top { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.add-top label { font-weight: 600; }
+.add-top input {
+  font: inherit; width: 5rem; padding: 0.3em 0.4em;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+button.secondary, table.data button.remove {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35em 0.8em;
+  cursor: pointer;
+}
+button.secondary:hover:not(:disabled), table.data button.remove:hover { border-color: var(--accent); }
+button.secondary:disabled { opacity: 0.55; cursor: progress; }
+button.secondary.danger:hover:not(:disabled), table.data button.remove:hover { border-color: var(--danger); color: var(--danger); }
+table.data button.remove { font-size: 0.8rem; padding: 0.1em 0.5em; }
+.add-contender { margin: 0.5rem 0 1rem; }
+.add-contender summary { cursor: pointer; font-weight: 600; }
+.add-contender .member { max-width: 26rem; margin-top: 0.5rem; }
+.problems { color: var(--danger); margin: 0.25rem 0 0.75rem; padding-left: 1.25rem; font-size: 0.9rem; }
+.pool-table { max-height: 70vh; }
+/* A contender's value that's at A level on its own (see the note under the list) */
+table.data td.meets-a { color: var(--ok); font-weight: 600; }
+table.data tr.problem td { color: var(--danger); }
+
 /* ---- Table controls (added by table.js) ---- */
 .table-controls {
   display: flex;
