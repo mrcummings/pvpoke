@@ -102,6 +102,8 @@
   // For search.js: this cup's contenders that check out, with their "In search" setting
   // (role: "use", "include" or "out").
   TF.pool = {
+    // How many contenders this cup's list has, checked or not
+    total: function () { return entries.length; },
     contenders: function () {
       return entries.filter(function (e) { var r = info[key(e)]; return r && r.ok; }).map(function (e) {
         var r = info[key(e)];
@@ -375,6 +377,7 @@
     if (!entries.length) { setStatus("No contenders for " + cup.label + " yet."); return; }
     run(evaluate([]).then(function () {
       render();
+      changed(); // now checked: search.js can count them
       var bad = entries.filter(function (e) { var r = info[key(e)]; return r && !r.ok; }).length;
       setStatus(entries.length + " contenders for " + cup.label + "." + (bad ? " " + bad + " no longer check out; see the table." : ""), bad > 0);
     }));

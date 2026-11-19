@@ -1,0 +1,14 @@
+{%- comment -%}
+  The Team Finder pages' shared top: the cup choice (filled in by common.js, and remembered in
+  this browser, so both pages start on the same cup), the page status line, and the species list
+  that every species box offers.
+{%- endcomment -%}
+<div class="team-form cup-picker">
+  <div class="field">
+    <label for="tf-cup">Cup</label>
+    <select id="tf-cup" name="cup"></select>
+  </div>
+  <span class="status" data-status aria-live="polite"></span>
+</div>
+
+<datalist id="tf-species"></datalist>

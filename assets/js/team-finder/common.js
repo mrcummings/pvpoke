@@ -1,10 +1,14 @@
-// common.js: what the Team Finder's two parts share (pool.js: the contenders; page.js: grade one
-// team). It loads first and sets up window.TF:
+// common.js: what the Team Finder's pages share (on /team-finder/: pool.js, the contenders, and
+// search.js, Find teams; on /team-finder/grade/: page.js, grade one team). It loads before them
+// and sets up window.TF:
 //
 //   TF.ready            a Promise, resolved once the game master is loaded and the cup list filled
 //   TF.gm, TF.speciesById, TF.speciesByName, TF.moveName     game master lookups
 //   TF.findSpecies(text), TF.findMove(text)                    by ID or name, not case-sensitive
 //   TF.currentCup()     { cup, cp, meta, key: "all/1500", label }
+//   TF.setCup(cup, cp)  chooses that cup (as if picked from the list); false if it isn't offered
+//   TF.gradeLink(cup, cp, team)   the /team-finder/grade/ address for a team of three
+//   TF.parseGradeLink(search)     reads one back: { cup, cp, team } or null
 //   TF.loadRankings(cup, cp)   Promise of that cup's overall rankings (cached)
 //   TF.fillMoves(fieldset, species, wanted)   fills a fieldset's three move lists
 //   TF.request(message, onProgress)   sends a job to worker.js; Promise of its result.
@@ -115,10 +119,51 @@
     };
   };
 
-  cupSelect.addEventListener("change", function () {
+  function cupChanged() {
     try { localStorage.setItem(CUP_STORE, cupSelect.value); } catch (e) { /* storage blocked */ }
     document.dispatchEvent(new CustomEvent("tf:cup", { detail: TF.currentCup() }));
-  });
+  }
+  cupSelect.addEventListener("change", cupChanged);
+
+  TF.setCup = function (cup, cp) {
+    var value = cup + "/" + cp;
+    if (!cupSelect.querySelector('option[value="' + value + '"]')) return false;
+    if (cupSelect.value !== value) { cupSelect.value = value; cupChanged(); }
+    return true;
+  };
+
+  // ---- Grade links: /team-finder/grade/?cup=all&cp=1500&p1=…&p2=…&p3=… ----
+  // Each p: speciesId,CP,atk,def,hp,fastMove,chargedMove1,chargedMove2 (charged 2 "none" if empty).
+  // team: three entries shaped like a contender's: { speciesId, cp, ivs: { atk, def, hp },
+  // fastMove, chargedMoves: [c1, c2] }.
+  TF.gradeLink = function (cup, cp, team) {
+    var q = "?cup=" + encodeURIComponent(cup) + "&cp=" + encodeURIComponent(cp);
+    team.forEach(function (e, i) {
+      var parts = [e.speciesId, e.cp, e.ivs.atk, e.ivs.def, e.ivs.hp, e.fastMove,
+        e.chargedMoves[0], e.chargedMoves[1] || "none"];
+      q += "&p" + (i + 1) + "=" + parts.map(function (x) { return encodeURIComponent(String(x)); }).join(",");
+    });
+    return "/team-finder/grade/" + q;
+  };
+
+  TF.parseGradeLink = function (search) {
+    var params = new URLSearchParams(search || "");
+    var cup = params.get("cup"), cp = Number(params.get("cp"));
+    if (!cup || !cp) return null;
+    var team = [];
+    for (var i = 1; i <= 3; i++) {
+      var p = params.get("p" + i);
+      if (!p) return null;
+      var f = p.split(",");
+      if (f.length < 7) return null;
+      team.push({
+        speciesId: f[0], cp: Number(f[1]),
+        ivs: { atk: Number(f[2]), def: Number(f[3]), hp: Number(f[4]) },
+        fastMove: f[5], chargedMoves: [f[6], f[7] || "none"]
+      });
+    }
+    return { cup: cup, cp: cp, team: team };
+  };
 
   TF.loadRankings = function (cup, cp) {
     var key = cup + "/" + cp;

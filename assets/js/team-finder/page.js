@@ -1,10 +1,14 @@
-// page.js: the Team Finder's "Grade one team" section (step 1: grade one team and compare with
-// pvpoke.com). Uses common.js (window.TF) for the game master, the cup and the worker.
+// page.js: the Team Finder's "Grade one team" page, /team-finder/grade/ (step 1: grade one team
+// and compare with pvpoke.com). Uses common.js (window.TF) for the game master, the cup and the
+// worker.
 //
 // - A species' moves default to its recommended moveset in the chosen cup's rankings.
 // - "Grade team" sends the team to worker.js, which runs upstream's engine in the background.
-// - The form is remembered in this browser (localStorage) so it's still filled in next time.
-// - TF.gradeTeam(entries) fills the form with a team from "Find teams" and grades it.
+// - An address with a team in it (TF.gradeLink; a search result's Grade link opens one) chooses
+//   its cup, fills the form and grades it straight away. After every grade the address is
+//   updated to hold the graded team, so it can be bookmarked.
+// - Otherwise the form is as it was left: it's remembered in this browser (localStorage).
+// - A different cup clears the results (they were for the old cup).
 
 (function () {
   "use strict";
@@ -161,17 +165,23 @@
     results.hidden = true;
     setStatus("Starting the battle engine…");
     TF.request({ type: "grade", cup: c.cup, cp: c.cp, meta: c.meta, team: team }, function (t) { setStatus(t); })
-      .then(function (r) { setStatus("Done."); render(r); })
+      .then(function (r) {
+        setStatus("Done.");
+        render(r);
+        try { history.replaceState(null, "", TF.gradeLink(c.cup, c.cp, team)); } catch (err) { /* address unchanged */ }
+      })
       .catch(function (err) { setStatus(err.message, true); })
       .then(function () { running = false; });
   });
 
-  // For search.js: fill the form with a team (three contender entries), grade it, scroll to it.
-  TF.gradeTeam = function (team) {
+  // Fills the form with a team (three entries shaped like contenders'). False if a species
+  // isn't known.
+  function fillTeam(team) {
+    if (team.some(function (e) { return !TF.speciesById[e.speciesId]; })) return false;
     team.forEach(function (e, i) {
       var fs = members[i];
       var species = TF.speciesById[e.speciesId];
-      if (!fs || !species) return;
+      if (!fs) return;
       fs.querySelector("[data-species]").value = species.speciesName;
       fs.querySelector("[data-cp]").value = e.cp;
       fs.querySelector('[data-iv="atk"]').value = e.ivs.atk;
@@ -181,9 +191,8 @@
       speciesChosen(fs, [e.fastMove, e.chargedMoves[0], e.chargedMoves[1] || "none"]);
     });
     save();
-    form.closest("section").scrollIntoView({ behavior: "smooth", block: "start" });
-    if (form.reportValidity()) form.requestSubmit();
-  };
+    return true;
+  }
 
   form.addEventListener("change", save);
   members.forEach(function (fs) {
@@ -192,9 +201,28 @@
     input.addEventListener("input", function () { if (TF.speciesByName[input.value.trim()]) speciesChosen(fs); });
   });
 
+  document.addEventListener("tf:cup", function () {
+    if (running) return;
+    results.hidden = true;
+    results.innerHTML = "";
+    setStatus("");
+  });
+
   // ---- Start ----
   TF.ready.then(function () {
-    restore();
     form.querySelector("[data-grade]").disabled = false;
+    var link = TF.parseGradeLink(location.search);
+    if (!link) { restore(); return; }
+    if (!TF.setCup(link.cup, link.cp)) {
+      restore();
+      setStatus("This link's cup (" + link.cup + ", " + link.cp + " CP) isn't offered here.", true);
+      return;
+    }
+    if (!fillTeam(link.team)) {
+      restore();
+      setStatus("This link names a Pokémon that isn't in the game master.", true);
+      return;
+    }
+    if (form.reportValidity()) form.requestSubmit();
   }).catch(function () { /* common.js shows the error */ });
 })();

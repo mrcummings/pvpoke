@@ -17,7 +17,7 @@
       <a href="{{ '/moves/' | relative_url }}"{% if page.url == '/moves/' %} aria-current="page"{% endif %}>Moves</a>
       <a href="{{ '/cups/' | relative_url }}"{% if page.url == '/cups/' %} aria-current="page"{% endif %}>Cups</a>
       <a href="{{ '/rankings/' | relative_url }}"{% if page.url contains '/rankings/' %} aria-current="page"{% endif %}>Rankings</a>
-      <a href="{{ '/team-finder/' | relative_url }}"{% if page.url == '/team-finder/' %} aria-current="page"{% endif %}>Team Finder</a>
+      <a href="{{ '/team-finder/' | relative_url }}"{% if page.url contains '/team-finder/' %} aria-current="page"{% endif %}>Team Finder</a>
     </nav>
     <button type="button" class="theme-toggle" data-theme-toggle hidden>Theme</button>
   </header>

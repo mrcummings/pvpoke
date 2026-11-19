@@ -144,11 +144,41 @@ button.primary:disabled { opacity: 0.55; cursor: progress; }
 .grade-card[data-grade="D"], .grade-card[data-grade="F"] { border-top-color: var(--danger); }
 .check { margin-top: 1rem; }
 
-/* Team Finder: the shared cup choice, the contenders, and the "Grade one team" section */
+/* Team Finder: links between its pages, "More about this" toggles, the shared cup choice,
+   the tabs (Contenders, Find teams), and the Grade one team page */
+.subnav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; margin: 0 0 0.75rem; }
+.subnav a { text-decoration: none; padding: 0.1rem 0; border-bottom: 2px solid transparent; }
+.subnav a:hover { border-bottom-color: var(--accent); }
+.subnav a[aria-current="page"] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+details.more { margin: -0.25rem 0 0.75rem; }
+details.more summary { cursor: pointer; color: var(--accent); font-size: 0.9rem; }
+details.more p { margin: 0.4rem 0 0; }
+.page-intro details.more p { color: var(--muted); font-size: 0.95rem; }
 .cup-picker { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 1rem; }
 .cup-picker .field { min-width: 16rem; margin-bottom: 0; }
-.pool, .grade-one { max-width: 72rem; margin-top: 2rem; }
-.pool h2, .grade-one h2 { margin: 0 0 0.25rem; }
+.tf-tabs { max-width: 72rem; margin-top: 1.5rem; }
+.tablist { display: flex; flex-wrap: wrap; gap: 0.25rem; border-bottom: 1px solid var(--border); }
+.tablist [role="tab"] {
+  font: inherit; font-weight: 600; font-size: 1.05rem;
+  color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-bottom: 3px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 0.45em 1em; margin-bottom: -1px; cursor: pointer;
+}
+.tablist [role="tab"]:hover { color: var(--text); border-bottom-color: var(--border); }
+.tablist [role="tab"][aria-selected="true"] {
+  color: var(--text); background: var(--accent-soft);
+  border-color: var(--border); border-bottom: 3px solid var(--accent);
+}
+.tf-tabs [role="tabpanel"] { padding-top: 0.75rem; }
+.grade-one { max-width: 72rem; margin-top: 1.5rem; }
+.search-pool { margin: 0 0 0.75rem; }
+table.data a.button-link {
+  font-size: 0.8rem; white-space: nowrap; text-decoration: none;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.1em 0.5em;
+}
+table.data a.button-link:hover { border-color: var(--accent); }
 .results h3 { margin: 1.25rem 0 0.5rem; }
 .pool-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0.75rem 0; }
 .add-top { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
@@ -189,8 +219,6 @@ table.data select.role {
 }
 
 /* Find teams */
-.search { max-width: 72rem; margin-top: 2rem; }
-.search h2 { margin: 0 0 0.25rem; }
 .search-form fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 1rem 0.6rem; margin: 0 0 0.75rem; }
 .search-form legend { font-weight: 600; padding: 0 0.3rem; }
 .search-form .targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0 1rem; }

@@ -9,8 +9,10 @@
 //   the 500 closest ("short by" = how many grade steps below the targets in total). That case is
 //   announced by a highlighted notice above the table, and "Short by" is then the first column
 //   after the team, so the fallback can't be mistaken for teams that meet the targets.
-// - Each team's "Grade" button loads it into "Grade one team" (page.js, TF.gradeTeam), which
-//   shows its top threats and a link to the same team on pvpoke.com.
+// - Each team's "Grade" link opens it on the Grade one team page (/team-finder/grade/, page.js) in
+//   a new tab, which shows its top threats and a link to the same team on pvpoke.com. A new tab,
+//   so these results (and the battles behind them) stay.
+// - The line above the targets says how many contenders the search will use (tf:pool, tf:tab).
 // - Results are cleared when the cup changes, and marked out of date when the contenders change.
 
 (function () {
@@ -28,6 +30,7 @@
   var statusEl = form.querySelector("[data-search-status]");
   var summaryEl = section.querySelector("[data-search-summary]");
   var closestEl = section.querySelector("[data-search-closest]");
+  var poolLine = section.querySelector("[data-search-pool]");
   var wrap = section.querySelector("[data-search-wrap]");
   var table = section.querySelector("[data-search-table]");
   var targetSelects = Array.prototype.slice.call(form.querySelectorAll("[data-target]"));
@@ -151,11 +154,10 @@
     rows.forEach(function (row) {
       var tr = el("tr");
       cols.forEach(function (c) { tr.appendChild(c.cell(row.t)); });
-      var gradeBtn = el("button", { type: "button", class: "remove", text: "Grade",
-        "aria-label": "Grade " + row.t.names.join(", ") + " in Grade one team" });
-      gradeBtn.addEventListener("click", function () {
-        if (TF.gradeTeam) TF.gradeTeam(row.t.members.map(function (m) { return last.used[m].entry; }));
-      });
+      var cupNow = last.cupKey.split("/");
+      var gradeBtn = el("a", { class: "button-link", text: "Grade ↗", target: "_blank", rel: "noopener",
+        href: TF.gradeLink(cupNow[0], cupNow[1], row.t.members.map(function (m) { return last.used[m].entry; })),
+        "aria-label": "Grade " + row.t.names.join(", ") + " (opens in a new tab)" });
       tr.appendChild(el("td", null, [gradeBtn]));
       tbody.appendChild(tr);
     });
@@ -242,13 +244,42 @@
     setStatus("Cancelling…");
   });
 
+  // ---- How many contenders the search will use (the line above the targets) ----
+  function showPool() {
+    if (!poolLine || !TF.pool) return;
+    var all = TF.pool.contenders();
+    var used = all.filter(function (c) { return c.role !== "out"; });
+    var include = used.filter(function (c) { return c.role === "include"; }).length;
+    var out = all.length - used.length;
+    var extras = [];
+    if (include) extras.push(include + " must include");
+    if (out) extras.push(out + " left out");
+    poolLine.innerHTML = "";
+    var link = el("a", { href: "#contenders", text: "Contenders tab" });
+    if (!all.length && TF.pool.total()) {
+      poolLine.textContent = "Checking this cup's contenders…";
+      return;
+    }
+    if (!all.length) {
+      poolLine.appendChild(document.createTextNode("No contenders for this cup yet: add them on the "));
+    } else {
+      poolLine.appendChild(document.createTextNode("Searching " + used.length + " of " + all.length + " contenders" +
+        (extras.length ? " (" + extras.join(", ") + ")" : "") + ". Change this on the "));
+    }
+    poolLine.appendChild(link);
+    poolLine.appendChild(document.createTextNode("."));
+  }
+  document.addEventListener("tf:tab", function (e) { if (e.detail === "find") showPool(); });
+
   // A different cup: these results don't apply. Changed contenders: they're out of date.
   document.addEventListener("tf:cup", function () {
     last = null;
     render();
+    showPool();
     if (!job) setStatus("");
   });
   document.addEventListener("tf:pool", function () {
+    showPool();
     if (!last || job) return;
     if (last.cupKey !== TF.currentCup().key) { last = null; render(); return; }
     if (!last.stale) { last.stale = true; render(); }
@@ -256,5 +287,5 @@
 
   // ---- Start ----
   restore();
-  TF.ready.then(function () { findBtn.disabled = false; }).catch(function () { /* common.js shows the error */ });
+  TF.ready.then(function () { findBtn.disabled = false; showPool(); }).catch(function () { /* common.js shows the error */ });
 })();

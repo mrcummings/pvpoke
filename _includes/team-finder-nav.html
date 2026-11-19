@@ -1,0 +1,7 @@
+{%- comment -%}
+  Links between the Team Finder's two pages, under the heading. The current page is marked.
+{%- endcomment -%}
+<nav class="subnav" aria-label="Team Finder pages">
+  <a href="{{ '/team-finder/' | relative_url }}"{% if page.url == '/team-finder/' %} aria-current="page"{% endif %}>Contenders and Find teams</a>
+  <a href="{{ '/team-finder/grade/' | relative_url }}"{% if page.url == '/team-finder/grade/' %} aria-current="page"{% endif %}>Grade one team</a>
+</nav>
