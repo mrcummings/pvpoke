@@ -23,6 +23,9 @@
 //   The search never puts a Pokémon on a team with its own upgrade (TF.pool gives each a group).
 //   A contender loaded, typed in or added from the rankings that's identical to an upgrade turns
 //   that upgrade into an ordinary contender (so it's exported like any other).
+// - Best team (filled by each Find teams run, kept until the page is reloaded): the best team of
+//   three each contender is in, with everyone else as they are now (worker.js, search). An
+//   upgrade's cell also shows the change in grade points against its original's Best team.
 //
 // CSV columns, any order, not case-sensitive, other columns ignored:
 //   speciesId, ivAtk, ivDef, ivHp, cp, fastMove, chargedMove1, chargedMove2
@@ -63,6 +66,7 @@
   var info = {};         // key(entry) -> the worker's result for it, in this cup
   var bulkGoal = 0;
   var battleResults = {}; // cup key -> { threats: N, byKey: { key(entry) -> { wins, losses, ties } } }
+  var bestResults = {};   // cup key -> { key(entry) -> { letters, points, threatScore, mates } } (last search)
   var busy = false;
   var sortCol = -1, sortDir = 0;
 
@@ -124,6 +128,12 @@
         return { entry: e, role: e.role || "use", name: r.speciesName, ivs: e.ivs, cp: e.cp, moveset: r.moveset,
           upgrade: e.upgrade ? e.upgrade.label : "", group: e.upgradeOf || key(e) };
       });
+    },
+    // After a search: each contender's Best team. list: [{ entry, best }] (best null if none)
+    recordBest: function (cupKey, list) {
+      var byKey = bestResults[cupKey] = {};
+      list.forEach(function (x) { if (x.best) byKey[key(x.entry)] = x.best; });
+      if (cup && cup.key === cupKey) render();
     },
     // After a search battled contenders itself: record their wins. list: [{ entry, record }]
     recordBattles: function (cupKey, threats, list) {
@@ -227,8 +237,25 @@
       good: function (v) { return v >= 0.9 * 98; } },
     { label: "Cup rank", num: true, value: function (e, r) { return r && r.ok ? r.rank : null; },
       text: function (e, r) { return r && r.ok ? (r.rank ? "#" + r.rank : "not ranked") : ""; } },
-    { label: "Wins", num: true, value: function (e, r, b) { return b ? b.wins : null; } }
+    { label: "Wins", num: true, value: function (e, r, b) { return b ? b.wins : null; } },
+    { label: "Best team", num: true, value: function (e) { var t = bestOf(e); return t ? t.points * 10000 - t.threatScore : null; },
+      cell: function (e) {
+        var t = bestOf(e);
+        if (!t) return [];
+        var out = [el("span", { class: "best-grades", text: t.letters.join("/") + " · " + t.points + " pts" })];
+        if (e.upgradeOf) {
+          var o = (bestResults[cup.key] || {})[e.upgradeOf];
+          if (o) {
+            var d = t.points - o.points;
+            out.push(" ", el("span", { class: "best-change " + (d > 0 ? "up" : d < 0 ? "down" : "same"),
+              text: d > 0 ? "+" + d + " vs. now" : d < 0 ? "−" + (-d) + " vs. now" : "same as now" }));
+          }
+        }
+        out.push(el("span", { class: "best-mates", text: "with " + t.mates.join(" + ") }));
+        return out;
+      } }
   ];
+  function bestOf(e) { return (bestResults[cup.key] || {})[key(e)] || null; }
 
   function cupBattles() {
     if (!battleResults[cup.key]) battleResults[cup.key] = { threats: 0, byKey: {} };
@@ -262,7 +289,7 @@
 
     var headRow = el("tr");
     COLUMNS.forEach(function (c, i) {
-      var th = el("th", { scope: "col", class: c.num ? "num" : "" });
+      var th = el("th", { scope: "col", class: c.num && !c.cell ? "num" : "" });
       var btn = el("button", { type: "button", class: "sort", text: c.label });
       btn.addEventListener("click", function () {
         if (sortCol !== i) { sortCol = i; sortDir = 1; }
@@ -298,7 +325,7 @@
       COLUMNS.forEach(function (c, i) {
         var v = c.value(row.e, row.r, row.b);
         var text = c.text ? c.text(row.e, row.r, row.b) : (v === null || v === undefined ? "" : String(v));
-        var cls = (c.num ? "num" : "") + (c.good && v !== null && c.good(v) ? " meets-a" : "");
+        var cls = (c.num && !c.cell ? "num" : "") + (c.good && v !== null && c.good(v) ? " meets-a" : "") + (c.label === "Best team" ? " best-team" : "");
         if (c.cell) tr.appendChild(el(i === 0 ? "th" : "td", { scope: i === 0 ? "row" : null, class: cls.trim() }, c.cell(row.e, row.r, row.b)));
         else tr.appendChild(el(i === 0 ? "th" : "td", { scope: i === 0 ? "row" : null, class: cls.trim(), text: text }));
       });
@@ -349,6 +376,8 @@
       "IV Rank: the IVs' rank by stat product among every IV combination for this species in this league (upstream's IV Rank; ?? = below the species' IV floor). " +
       "Safety: the species' switches score in this cup's rankings, 60 if it isn't ranked (as upstream's Team Builder does). " +
       (fought.threats ? "Wins: how many of the " + fought.threats.toLocaleString() + " Pokémon in this cup it beats one-on-one (battle rating above 500, shields 0 and 1 combined). " : "") +
+      (Object.keys(bestResults[cup.key] || {}).length ? "Best team (from the last Find teams): its best team of three among the contenders in that search, with everyone else as they are now; the rules apply, but not Must include, the targets or the upgrades limit. For an upgraded version, \"vs. now\" compares its grade points with its original's Best team. " :
+        "Best team fills in when you run Find teams. ") +
       "Click a heading to sort.";
   }
 

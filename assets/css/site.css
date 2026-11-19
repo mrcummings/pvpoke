@@ -219,6 +219,16 @@ table.data td.row-actions { white-space: nowrap; }
 table.data td.row-actions button + button { margin-left: 0.3rem; }
 table.data td.upgrades .line { display: block; }
 table.data td.upgrades .none { color: var(--muted); }
+/* Best team (step B): grades and points, the change for an upgrade, then the teammates */
+table.data td.best-team { white-space: normal; min-width: 14rem; }
+table.data td.best-team .best-grades { font-weight: 600; white-space: nowrap; }
+table.data td.best-team .best-change { font-weight: 700; white-space: nowrap; }
+table.data td.best-team .best-change.up { color: var(--ok); }
+table.data td.best-team .best-change.down { color: var(--danger); }
+table.data td.best-team .best-change.same { color: var(--muted); }
+table.data td.best-team .best-mates { display: block; color: var(--muted); font-size: 0.8rem; }
+.search-form .inline-field { flex-direction: row; align-items: center; gap: 0.5rem; margin: 0.4rem 0 0.1rem; }
+.search-form .inline-field label { font-weight: 400; font-size: 0.95rem; }
 .upgrade-dialog {
   max-width: min(32rem, calc(100vw - 32px)); width: 100%;
   color: var(--text); background: var(--surface);

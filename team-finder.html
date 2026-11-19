@@ -207,6 +207,14 @@ permalink: /team-finder/
         <legend>Rules</legend>
         <label class="check-label"><input type="checkbox" data-rule="sameDex" checked> No two with the same Pokédex number (GBL: no repeated species; a Shadow counts as its species)</label>
         <label class="check-label"><input type="checkbox" data-rule="oneMega" checked> At most one Mega</label>
+        <div class="field inline-field">
+          <label for="tf-max-upgrades">Upgraded versions per team</label>
+          <select id="tf-max-upgrades" data-max-upgrades>
+            <option value="0">None (your Pokémon as they are now)</option>
+            <option value="1" selected>At most 1</option>
+            <option value="3">Any</option>
+          </select>
+        </div>
       </fieldset>
       <div class="actions">
         <button type="submit" class="primary" data-find disabled>Find teams</button>

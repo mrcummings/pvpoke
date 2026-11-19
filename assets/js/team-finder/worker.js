@@ -503,6 +503,11 @@ function winCount(res) {
 // Rules: sameDex = no two members with the same Pokédex number (GBL: no repeated species, and a
 // Shadow counts as its species); oneMega = at most one Mega. Always, whatever the rules: no two
 // members with the same group (msg.groups[i]; a Pokémon and its upgraded versions share one).
+// rules.maxUpgrades: at most this many upgraded versions (msg.upgraded[i] true) per listed team.
+// Best team per contender (the pool's "Best team" column): the best team it's in, by grade points
+// and then threat score, with every other member as it is now (no other upgrade), so an upgrade
+// and its original compare fairly. It follows the rules above but ignores Must include, the
+// targets and maxUpgrades, so it always answers the same question.
 // Output: the best 500 teams meeting the targets (or, if none do, the 500 closest), plus counts.
 var POINTS = { A: 4, B: 3, C: 2, D: 1, F: 0 };
 var LETTERS = ["F", "D", "C", "B", "A"];
@@ -611,6 +616,13 @@ async function search(msg) {
   var N = built.length;
   var include = (msg.include || []).slice().sort(function (x, y) { return x - y; });
   var groups = Array.isArray(msg.groups) && msg.groups.length === N ? msg.groups : null;
+  var upgraded = [];
+  for (var u0 = 0; u0 < N; u0++) upgraded.push(Array.isArray(msg.upgraded) && msg.upgraded[u0] ? 1 : 0);
+  var maxUpgrades = msg.rules && msg.rules.maxUpgrades !== undefined && msg.rules.maxUpgrades !== null ? Number(msg.rules.maxUpgrades) : 3;
+  var best = [];
+  for (var b0 = 0; b0 < N; b0++) best.push(null);
+  function better(x, y) { return !y || x.total > y.total || (x.total === y.total && x.ts < y.ts); }
+  function offerBest(i, t) { if (better(t, best[i])) best[i] = t; }
   if (include.length > 3) throw new Error("At most 3 contenders can be marked \"must include\".");
   var rules = msg.rules || {};
   var targets = msg.targets || {};
@@ -628,10 +640,13 @@ async function search(msg) {
           await new Promise(function (r) { setTimeout(r, 0); });
           if (cancelled[currentId]) { delete cancelled[currentId]; throw new Error("Cancelled."); }
         }
-        if (include.length && include.some(function (x) { return x !== a && x !== b2 && x !== c; })) { ruledOut++; continue; }
         if (groups && (groups[a] === groups[b2] || groups[a] === groups[c] || groups[b2] === groups[c])) { ruledOut++; continue; }
         if (rules.sameDex && (dex[a] === dex[b2] || dex[a] === dex[c] || dex[b2] === dex[c])) { ruledOut++; continue; }
         if (rules.oneMega && (mega[a] + mega[b2] + mega[c]) > 1) { ruledOut++; continue; }
+        var ups = upgraded[a] + upgraded[b2] + upgraded[c];
+        var listed = ups <= maxUpgrades &&
+          !(include.length && include.some(function (x) { return x !== a && x !== b2 && x !== c; }));
+        if (!listed && ups > 1) { ruledOut++; continue; } // not needed for any Best team either
 
         var ts = threatScore(a, b2, c);
         var avgBulk = (bulk[a] + bulk[b2] + bulk[c]) / 3;
@@ -643,11 +658,16 @@ async function search(msg) {
           POINTS[letterGrade(avgSafety, 98)],
           POINTS[letterGrade(avgCons, 98)]
         ];
+        var team = { m: [a, b2, c], ts: ts, bulk: avgBulk, safety: avgSafety, consistency: avgCons, pts: pts, short: 0,
+          total: pts[0] + pts[1] + pts[2] + pts[3] };
+        if (ups === 0) { offerBest(a, team); offerBest(b2, team); offerBest(c, team); }
+        else if (ups === 1) offerBest(upgraded[a] ? a : upgraded[b2] ? b2 : c, team);
+        if (!listed) { ruledOut++; continue; }
         var short = 0;
         for (var g = 0; g < 4; g++) short += Math.max(0, need[g] - pts[g]);
         if (short === 0) qualifying++;
-        teams.push({ m: [a, b2, c], ts: ts, bulk: avgBulk, safety: avgSafety, consistency: avgCons, pts: pts, short: short,
-          total: pts[0] + pts[1] + pts[2] + pts[3] });
+        team.short = short;
+        teams.push(team);
       }
     }
   }
@@ -671,6 +691,13 @@ async function search(msg) {
     possible: possible, ruledOut: ruledOut, graded: teams.length, qualifying: qualifying,
     closest: qualifying === 0, teams: shown, battled: todo.length, threats: T, bulkGoal: bGoal,
     records: results.map(winCount), // each contender's wins, for the pool's Wins column
+    best: best.map(function (t, i) {  // each contender's Best team, for the pool
+      return t && {
+        mates: t.m.filter(function (x) { return x !== i; }),
+        letters: t.pts.map(function (p) { return LETTERS[p]; }),
+        points: t.total, threatScore: t.ts
+      };
+    }),
     ms: Date.now() - t0
   });
 }

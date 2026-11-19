@@ -13,6 +13,8 @@
 //   a new tab, which shows its top threats and a link to the same team on pvpoke.com. A new tab,
 //   so these results (and the battles behind them) stay.
 // - The line above the targets says how many contenders the search will use (tf:pool, tf:tab).
+// - "Upgraded versions per team" (none, at most 1, any; default at most 1) limits the listed
+//   teams. Each search also sends every contender's Best team to the pool (TF.pool.recordBest).
 // - Results are cleared when the cup changes, and marked out of date when the contenders change.
 
 (function () {
@@ -35,6 +37,7 @@
   var table = section.querySelector("[data-search-table]");
   var targetSelects = Array.prototype.slice.call(form.querySelectorAll("[data-target]"));
   var ruleBoxes = Array.prototype.slice.call(form.querySelectorAll("[data-rule]"));
+  var maxUpSelect = form.querySelector("[data-max-upgrades]");
   var STORE = "team-finder-search";
 
   var job = null;
@@ -51,6 +54,7 @@
     var state = { targets: {}, rules: {} };
     targetSelects.forEach(function (s) { state.targets[s.getAttribute("data-target")] = s.value; });
     ruleBoxes.forEach(function (b) { state.rules[b.getAttribute("data-rule")] = b.checked; });
+    state.maxUpgrades = maxUpSelect.value;
     try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* storage blocked */ }
   }
   function restore() {
@@ -65,6 +69,7 @@
       var v = state.rules && state.rules[b.getAttribute("data-rule")];
       if (typeof v === "boolean") b.checked = v;
     });
+    if (state.maxUpgrades !== undefined && maxUpSelect.querySelector('option[value="' + state.maxUpgrades + '"]')) maxUpSelect.value = state.maxUpgrades;
   }
   form.addEventListener("change", save);
 
@@ -179,7 +184,7 @@
   function summarize(r, used, cupLabel) {
     var parts = [];
     parts.push(cupLabel + ": " + r.graded.toLocaleString() + " teams of three graded from " + used.length + " contenders" +
-      (r.ruledOut ? " (" + r.ruledOut.toLocaleString() + " more ruled out by the rules or Must include)" : "") +
+      (r.ruledOut ? " (" + r.ruledOut.toLocaleString() + " more ruled out by the rules, Must include or the upgrades limit)" : "") +
       " in " + (r.ms / 1000).toFixed(1) + " s" + (r.battled ? ", after battling " + r.battled + " new contender" + (r.battled === 1 ? "" : "s") : "") + ".");
     if (!r.graded) parts.push("No team is allowed by the rules and Must include settings.");
     else parts.push(r.qualifying.toLocaleString() + " meet the targets" + (r.qualifying > r.teams.length ? "; showing the best " + r.teams.length : "") + ".");
@@ -203,6 +208,7 @@
     targetSelects.forEach(function (s) { targets[s.getAttribute("data-target")] = Number(s.value); });
     var rules = {};
     ruleBoxes.forEach(function (b) { rules[b.getAttribute("data-rule")] = b.checked; });
+    rules.maxUpgrades = Number(maxUpSelect.value);
 
     var names = used.map(memberLabel);
     // A Pokémon and its upgraded versions share a group: never two of them on one team
@@ -223,7 +229,8 @@
         var e = c.entry;
         return { speciesId: e.speciesId, ivs: e.ivs, cp: e.cp, fastMove: e.fastMove, chargedMoves: e.chargedMoves };
       }),
-      include: include, rules: rules, targets: targets, groups: groups
+      include: include, rules: rules, targets: targets, groups: groups,
+      upgraded: used.map(function (c) { return !!c.upgrade; })
     }, function (text, m) {
       setStatus(text);
       if (m.total) { progressEl.max = m.total; progressEl.value = m.done; }
@@ -237,6 +244,15 @@
       });
       last = { result: r, used: used, cupKey: cup.key, targets: targets, summary: summarize(r, used, cup.label) };
       sortCol = -1; sortDir = 0;
+      if (TF.pool && TF.pool.recordBest) {
+        TF.pool.recordBest(cup.key, used.map(function (c, i) {
+          var b = r.best[i];
+          return { entry: c.entry, best: b && {
+            letters: b.letters, points: b.points, threatScore: b.threatScore,
+            mates: b.mates.map(function (m) { return used[m].name + (used[m].upgrade ? " " + used[m].upgrade : ""); })
+          } };
+        }));
+      }
       if (TF.pool && TF.pool.recordBattles) {
         TF.pool.recordBattles(cup.key, r.threats, used.map(function (c, i) { return { entry: c.entry, record: r.records[i] }; }));
       }
